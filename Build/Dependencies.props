@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+	<!-- ====================================================================
+       外部ライブラリの場所。
+       別のPCでビルドするときは、この2行だけ書き換えれば通る。
+       (環境変数で FbxSdkDir / DirectXTexDir を定義すればそちらが優先される)
+       ==================================================================== -->
+	<PropertyGroup Label="ExternalDependencies">
+		<FbxSdkDir Condition="'$(FbxSdkDir)' == ''">C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.7</FbxSdkDir>
+		<DirectXTexDir Condition="'$(DirectXTexDir)' == ''">C:\lib\DirectXTex-main</DirectXTexDir>
+	</PropertyGroup>
+
+	<!-- 成果物は Bin\ に、中間ファイルは Build\Intermediate\ にまとめる -->
+	<PropertyGroup>
+		<OutDir>$(SolutionDir)Bin\$(Platform)\$(Configuration)\</OutDir>
+		<IntDir>$(SolutionDir)Build\Intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+	</PropertyGroup>
+
+	<ItemDefinitionGroup>
+		<ClCompile>
+			<!-- ルートを通すので #include "Engine/Combat/ParrySystem.h" と書ける。
+           include 文を見ればどのモジュールの物か分かる。 -->
+			<AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)lib\imgui;$(SolutionDir)lib\d3dx12;$(FbxSdkDir)\include;$(DirectXTexDir)\DirectXTex;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+			<LanguageStandard>stdcpp17</LanguageStandard>
+			<ConformanceMode>true</ConformanceMode>
+			<PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+			<MultiProcessorCompilation>true</MultiProcessorCompilation>
+			<!-- 移植したコードをそのまま通すため、プリコンパイル済みヘッダは使わない -->
+			<PrecompiledHeader>NotUsing</PrecompiledHeader>
+			<!-- ソースを常に UTF-8 として読む。これが無いと BOM なしの
+           日本語コメントが CP932 と誤解され、構文エラーになる。 -->
+			<AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+		</ClCompile>
+		<Link>
+			<!-- Debug と Release でリンクするライブラリが違うが、
+           $(Configuration) に Debug / Release がそのまま入るので1行で足りる。 -->
+			<AdditionalLibraryDirectories>$(FbxSdkDir)\lib\x64\$(Configuration);$(DirectXTexDir)\DirectXTex\Bin\Desktop_2022_Win10\x64\$(Configuration);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+		</Link>
+	</ItemDefinitionGroup>
+
+</Project>

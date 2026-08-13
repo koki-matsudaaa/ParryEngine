@@ -1,0 +1,20 @@
+# アセットは改行変換をせずバイナリとして扱う (再クローン時の破損防止)
+*.fbx   binary
+*.png   binary
+*.PNG   binary
+*.bmp   binary
+*.tga   binary
+*.dds   binary
+*.wav   binary
+*.mp3   binary
+
+# ソースは CRLF に統一
+*.cpp     text eol=crlf
+*.h       text eol=crlf
+*.hlsl    text eol=crlf
+*.hlsli   text eol=crlf
+*.vcxproj text eol=crlf
+*.props   text eol=crlf
+*.sln     text eol=crlf
+*.json    text eol=crlf
+*.md      text eol=crlf

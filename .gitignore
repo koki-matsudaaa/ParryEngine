@@ -1,0 +1,24 @@
+# ── ビルド出力 ──
+Bin/
+Build/Intermediate/
+[Dd]ebug/
+[Rr]elease/
+x64/
+
+# ── Visual Studio ──
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.aps
+*.ilk
+*.pdb
+*.idb
+*.tlog
+
+# ── 実行時に生成されるもの ──
+imgui.ini
+*.log
+*.tmp
+*.cache
