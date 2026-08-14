@@ -1,51 +1,39 @@
-﻿#include "Engine/Core/Dx12Context.h"
-#include "Engine/Core/FixedTimestep.h"
+﻿#include "Engine/Core/Application.h"
 
-#include <chrono>
 #include <cstdio>
+
+// ゲーム本体。Engine::Application を継承して、中身だけを書く。
+// ウィンドウもループも時間管理も Engine 側が持っているので、
+// ここには「このゲームが何をするか」しか出てこない。
+class GameApp : public Engine::Application
+{
+protected:
+    bool OnStart() override
+    {
+        std::printf("ウィンドウを閉じると終了します\n");
+        return true;
+    }
+
+    void OnUpdate(float dt) override
+    {
+        // ここに world.Step(dt) が入る。dt は常に 1/60 秒。
+        (void)dt;
+    }
+
+    void OnRender(float alpha) override
+    {
+        // ここに renderer.Draw(alpha) が入る。
+        (void)alpha;
+    }
+
+    void OnShutdown() override
+    {
+        std::printf("終了。総フレーム数 %llu\n", Clock().FrameCount());
+    }
+};
 
 int main()
 {
-    SetConsoleOutputCP(CP_UTF8);
-
-    // ウィンドウを作って表示する
-    HWND       hwnd = nullptr;
-    WNDCLASSEX windowClass = {};
-    CreateGameWindow(hwnd, windowClass);
-    ShowWindow(hwnd, SW_SHOW);
-
-    Engine::FixedTimestep clock;
-    auto prev = std::chrono::high_resolution_clock::now();
-
-    std::printf("ウィンドウを閉じると終了します\n");
-
-    MSG msg = {};
-    while (true)
-    {
-        // 溜まったウィンドウメッセージを片付ける
-        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-        if (msg.message == WM_QUIT) break;
-
-        // 実時間を測り、固定ステップの回数に変換する
-        auto  now = std::chrono::high_resolution_clock::now();
-        float real = std::chrono::duration<float>(now - prev).count();
-        prev = now;
-
-        int steps = clock.Advance(real);
-        for (int i = 0; i < steps; i++)
-        {
-            // ここが将来の world.Step(clock.StepSeconds())
-        }
-
-        // ここが将来の renderer.Draw(clock.Alpha())
-    }
-
-    std::printf("終了。総フレーム数 %llu\n", clock.FrameCount());
-
-    UnregisterClass(windowClass.lpszClassName, windowClass.hInstance);
-    return 0;
+    GameApp app;
+    return app.Run();
 }
