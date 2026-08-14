@@ -1,6 +1,6 @@
-﻿#include "pch.h"
+﻿#include "Engine/Core/pch.h"
 // コンスタントバッファで行列を転送
-#include "Dx12Context.h"
+#include "Engine/Core/Dx12Context.h"
 #include "imgui_impl_win32.h"
 #include <d3dcompiler.h>
 #include <dxgidebug.h>
@@ -71,7 +71,7 @@ void CreateGameWindow(HWND& hwnd, WNDCLASSEX& windowClass) {
     AdjustWindowRect(&wrc, WS_OVERLAPPEDWINDOW, false);
     hwnd = CreateWindow(
         windowClass.lpszClassName,
-        _T("DX12 マテリアル反映"),
+        _T("ParryEngine"),
         WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT,
         wrc.right - wrc.left,

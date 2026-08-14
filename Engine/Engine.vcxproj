@@ -58,10 +58,20 @@
        進捗は MIGRATION.md を参照。
        ==================================================================== -->
   <ItemGroup>
+    <ClInclude Include="Core\Dx12Context.h" />
     <ClInclude Include="Core\FixedTimestep.h" />
+    <ClInclude Include="Core\pch.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\lib\imgui\imgui.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_impl_dx12.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_impl_win32.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Core\Dx12Context.cpp" />
     <ClCompile Include="Core\FixedTimestep.cpp" />
+    <ClCompile Include="Core\pch.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
