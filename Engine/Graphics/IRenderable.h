@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "pch.h"
+#include "Engine/Core/pch.h"
 
 // 描画に使うパイプラインの種別。
 // モデルごとに頂点構造・シェーダが違うため、どのパイプラインで描くかを

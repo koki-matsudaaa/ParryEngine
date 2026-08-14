@@ -1,6 +1,6 @@
 ﻿#pragma once
-#include "Dx12Context.h"
-#include "IRenderable.h"
+#include "Engine/Core/Dx12Context.h"
+#include "Engine/Graphics/IRenderable.h"
 #include <fbxsdk.h>
 #include <vector>
 #include <string>

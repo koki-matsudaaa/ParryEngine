@@ -67,6 +67,33 @@ namespace Engine
             return false;
         }
 
+        // ── 拡張子ごとのテクスチャ読み込み方を登録 ──
+        // Dx12Context の LoadTextureFromFile がこの表を引く。
+        loadLambdaTable["sph"] =
+        loadLambdaTable["spa"] =
+        loadLambdaTable["bmp"] =
+        loadLambdaTable["png"] =
+        loadLambdaTable["jpg"] =
+            [](const std::wstring& path, DirectX::TexMetadata* meta,
+                DirectX::ScratchImage& img) -> HRESULT
+            {
+                return DirectX::LoadFromWICFile(path.c_str(),
+                    DirectX::WIC_FLAGS_NONE, meta, img);
+            };
+        loadLambdaTable["tga"] =
+            [](const std::wstring& path, DirectX::TexMetadata* meta,
+                DirectX::ScratchImage& img) -> HRESULT
+            {
+                return DirectX::LoadFromTGAFile(path.c_str(), meta, img);
+            };
+        loadLambdaTable["dds"] =
+            [](const std::wstring& path, DirectX::TexMetadata* meta,
+                DirectX::ScratchImage& img) -> HRESULT
+            {
+                return DirectX::LoadFromDDSFile(path.c_str(),
+                    DirectX::DDS_FLAGS_NONE, meta, img);
+            };
+
         // ── ビューポートとシザー矩形 ──────────────────
         m_viewport.Width = static_cast<float>(window_width);
         m_viewport.Height = static_cast<float>(window_height);

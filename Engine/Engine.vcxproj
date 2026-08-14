@@ -62,6 +62,8 @@
     <ClInclude Include="Core\Dx12Context.h" />
     <ClInclude Include="Core\FixedTimestep.h" />
     <ClInclude Include="Core\pch.h" />
+    <ClInclude Include="Graphics\FbxModel.h" />
+    <ClInclude Include="Graphics\IRenderable.h" />
     <ClInclude Include="Graphics\Renderer.h" />
   </ItemGroup>
   <ItemGroup>
@@ -75,6 +77,8 @@
     <ClCompile Include="Core\Dx12Context.cpp" />
     <ClCompile Include="Core\FixedTimestep.cpp" />
     <ClCompile Include="Core\pch.cpp" />
+    <ClCompile Include="Graphics\FbxModel.cpp" />
+    <ClCompile Include="Graphics\IRenderable.cpp" />
     <ClCompile Include="Graphics\Renderer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

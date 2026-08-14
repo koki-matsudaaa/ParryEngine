@@ -1,5 +1,5 @@
-﻿#include "pch.h"
-#include "FbxModel.h"
+﻿#include "Engine/Core/pch.h"
+#include "Engine/Graphics/FbxModel.h"
 #include <cfloat>
 
 // ──────────────────────────────────────────
