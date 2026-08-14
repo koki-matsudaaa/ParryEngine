@@ -11,12 +11,25 @@ namespace Engine
         // Windows のコンソールは既定で CP932 なので、合わせておかないと化ける。
         SetConsoleOutputCP(CP_UTF8);
 
+        // テクスチャ読み込み (WIC) が COM を使うので先に初期化する。
+        CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+
         CreateGameWindow(m_hwnd, m_windowClass);
         ShowWindow(m_hwnd, SW_SHOW);
 
+        if (!m_renderer.Initialize(m_hwnd))
+        {
+            OutputDebugStringA("Renderer::Initialize failed\n");
+            UnregisterClass(m_windowClass.lpszClassName, m_windowClass.hInstance);
+            CoUninitialize();
+            return -1;
+        }
+
         if (!OnStart())
         {
+            m_renderer.Shutdown();
             UnregisterClass(m_windowClass.lpszClassName, m_windowClass.hInstance);
+            CoUninitialize();
             return -1;
         }
 
@@ -44,12 +57,16 @@ namespace Engine
                 OnUpdate(m_clock.StepSeconds());
             }
 
+            m_renderer.BeginFrame(m_clearColor);
             OnRender(m_clock.Alpha());
+            m_renderer.EndFrame();
         }
 
         OnShutdown();
+        m_renderer.Shutdown();
 
         UnregisterClass(m_windowClass.lpszClassName, m_windowClass.hInstance);
+        CoUninitialize();
         return 0;
     }
 }

@@ -10,6 +10,7 @@ class GameApp : public Engine::Application
 protected:
     bool OnStart() override
     {
+        SetClearColor(0.10f, 0.16f, 0.24f);   // 少し青みがかった暗いグレー
         std::printf("ウィンドウを閉じると終了します\n");
         return true;
     }
