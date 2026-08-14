@@ -4,6 +4,39 @@
 
 namespace Engine
 {
+    namespace
+    {
+        // 定数バッファのアドレスは 256 バイト境界でないといけない。
+        constexpr UINT kObjectStride = 256;
+        constexpr UINT kMaxObjectsPerFrame = 256;
+
+        // CPU から毎フレーム書き込めるバッファ (アップロードヒープ) を作る。
+        ID3D12Resource* CreateUploadBuffer(size_t bytes)
+        {
+            D3D12_HEAP_PROPERTIES heap = {};
+            heap.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+            D3D12_RESOURCE_DESC desc = {};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            desc.Width = bytes;
+            desc.Height = 1;
+            desc.DepthOrArraySize = 1;
+            desc.MipLevels = 1;
+            desc.Format = DXGI_FORMAT_UNKNOWN;
+            desc.SampleDesc.Count = 1;
+            desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+            ID3D12Resource* res = nullptr;
+            if (FAILED(_dev->CreateCommittedResource(
+                &heap, D3D12_HEAP_FLAG_NONE, &desc,
+                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&res))))
+            {
+                return nullptr;
+            }
+            return res;
+        }
+    }
+
     bool Renderer::Initialize(HWND hwnd)
     {
 #ifdef _DEBUG
@@ -107,6 +140,10 @@ namespace Engine
         m_scissor.right = static_cast<LONG>(window_width);
         m_scissor.bottom = static_cast<LONG>(window_height);
 
+        // ── シェーダとパイプライン ──────────────────
+        if (!m_pipelines.Initialize()) return false;
+        if (!CreateConstantBuffers()) return false;
+
         return true;
     }
 
@@ -114,6 +151,12 @@ namespace Engine
     {
         // GPU が使っている最中に解放すると落ちるので、必ず待ってから。
         if (m_fence) WaitForGpu();
+
+        m_pipelines.Shutdown();
+        if (m_objectCB) { m_objectCB->Unmap(0, nullptr); m_objectCB->Release(); m_objectCB = nullptr; }
+        if (m_sceneCB) { m_sceneCB->Unmap(0, nullptr);  m_sceneCB->Release();  m_sceneCB = nullptr; }
+        m_objectRaw = nullptr;
+        m_sceneMap = nullptr;
 
         if (m_fence) { m_fence->Release();       m_fence = nullptr; }
         if (m_dsvHeap) { m_dsvHeap->Release();     m_dsvHeap = nullptr; }
@@ -131,6 +174,7 @@ namespace Engine
 
     void Renderer::BeginFrame(const float clearColor[4])
     {
+        m_objectIndex = 0;   // オブジェクト定数の使用位置を巻き戻す
         m_backBufferIndex = _swapchain->GetCurrentBackBufferIndex();
 
         // 画面に出す用 → 描画先 へ状態を移す
@@ -191,5 +235,63 @@ namespace Engine
             WaitForSingleObjectEx(event, INFINITE, false);
             CloseHandle(event);
         }
+    }
+
+    bool Renderer::CreateConstantBuffers()
+    {
+        // b0 : カメラ。1フレームに1回だけ書く。
+        m_sceneCB = CreateUploadBuffer((sizeof(SceneConstants) + 255) & ~255u);
+        if (!m_sceneCB) return false;
+        if (FAILED(m_sceneCB->Map(0, nullptr,
+            reinterpret_cast<void**>(&m_sceneMap)))) return false;
+
+        // b2 : オブジェクトごとの world。
+        // 1フレームに複数描けるよう、256バイト刻みで並べて確保しておく。
+        // 1つしか用意しないと、後から書いた world で全部が上書きされてしまう。
+        m_objectCB = CreateUploadBuffer(kObjectStride * kMaxObjectsPerFrame);
+        if (!m_objectCB) return false;
+        if (FAILED(m_objectCB->Map(0, nullptr,
+            reinterpret_cast<void**>(&m_objectRaw)))) return false;
+
+        return true;
+    }
+
+    void Renderer::SetCamera(const DirectX::XMMATRIX& view,
+        const DirectX::XMMATRIX& proj,
+        const DirectX::XMFLOAT3& eye)
+    {
+        m_sceneMap->view = view;
+        m_sceneMap->proj = proj;
+        m_sceneMap->eye = eye;
+    }
+
+    void Renderer::DrawModel(IRenderable* model, const DirectX::XMMATRIX& world)
+    {
+        if (!model) return;
+
+        // どのパイプラインで描くかはモデル自身が答える。
+        ID3D12PipelineState* pso = m_pipelines.Get(model->GetPipelineType());
+        if (!pso) return;
+
+        if (m_objectIndex >= kMaxObjectsPerFrame) return;
+
+        // このオブジェクト専用の場所に world を書く。
+        auto* dst = reinterpret_cast<DirectX::XMMATRIX*>(
+            m_objectRaw + m_objectIndex * kObjectStride);
+        *dst = world;
+
+        _cmdList->SetPipelineState(pso);
+        _cmdList->SetGraphicsRootSignature(m_pipelines.RootSignature());
+        _cmdList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        _cmdList->SetGraphicsRootConstantBufferView(
+            0, m_sceneCB->GetGPUVirtualAddress());
+        _cmdList->SetGraphicsRootConstantBufferView(
+            1, m_objectCB->GetGPUVirtualAddress() + m_objectIndex * kObjectStride);
+
+        // 頂点バッファとテクスチャの割り当ては、モデル自身が行う。
+        model->Draw(_cmdList);
+
+        m_objectIndex++;
     }
 }

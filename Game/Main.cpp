@@ -3,6 +3,8 @@
 
 #include <cstdio>
 
+using namespace DirectX;
+
 class GameApp : public Engine::Application
 {
     FbxModel m_terrain;
@@ -12,31 +14,41 @@ protected:
     {
         SetClearColor(0.10f, 0.16f, 0.24f);
 
-        // 実行時のカレントはソリューションのルート。
-        // (Game のプロパティ → デバッグ → 作業ディレクトリ = $(SolutionDir))
-        if (!m_terrain.Load("Assets/Model/SnowTerrain.fbx"))
+        if (!m_terrain.Load("Assets/Model/SnowTerrain.fbx", "Assets/Model/grass_texture_01.png"))
         {
             std::printf("FBX の読み込みに失敗しました\n");
             return false;
         }
 
-        std::printf("読み込み成功\n");
-        std::printf("  頂点数       : %zu\n", m_terrain.GetVertices().size());
-        std::printf("  インデックス : %zu\n", m_terrain.GetIndices().size());
-        std::printf("  ボーン数     : %zu\n", m_terrain.GetBoneCount());
-        std::printf("ウィンドウを閉じると終了します\n");
-        return true;
-    }
+        // ボーンを持たないメッシュなので Static パイプラインで描く。
+        m_terrain.SetStaticPipeline(true);
 
-    void OnUpdate(float dt) override
-    {
-        (void)dt;
+        // カメラの距離を決めるため、モデルの大きさを出しておく。
+        const XMFLOAT3 mn = m_terrain.GetMin();
+        const XMFLOAT3 mx = m_terrain.GetMax();
+        std::printf("頂点数 %zu\n", m_terrain.GetVertices().size());
+        std::printf("範囲 X[%.1f .. %.1f]  Y[%.1f .. %.1f]  Z[%.1f .. %.1f]\n",
+            mn.x, mx.x, mn.y, mx.y, mn.z, mx.z);
+        return true;
     }
 
     void OnRender(float alpha) override
     {
-        // ここに描画コマンドを積む。次のステップで実装する。
         (void)alpha;
+
+        // 見下ろしの固定カメラ。カメラ操作は次のステップで入れる。
+        const XMVECTOR eye = XMVectorSet(0.0f, 5.0f, -10.0f, 1.0f);
+        const XMVECTOR target = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+        const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+
+        const XMMATRIX view = XMMatrixLookAtLH(eye, target, up);
+        const XMMATRIX proj = XMMatrixPerspectiveFovLH(XM_PIDIV4, 1280.0f / 720.0f, 1.0f, 10000.0f);
+
+        XMFLOAT3 eyePos;
+        XMStoreFloat3(&eyePos, eye);
+
+        GetRenderer().SetCamera(view, proj, eyePos);
+        GetRenderer().DrawModel(&m_terrain, XMMatrixIdentity());
     }
 
     void OnShutdown() override

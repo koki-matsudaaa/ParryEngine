@@ -91,10 +91,7 @@ bool FbxModel::Load(const std::string& path, const std::string& texturePath)
     {
         m_texture = LoadTextureFromFile(texPath);
     }
-    if (!texPath.empty())
-    {
-        m_texture = LoadTextureFromFile(texPath);
-    }
+
     if (!m_texture)
     {
         OutputDebugStringA(("Texture load FAILED: " + texPath + "\n").c_str());

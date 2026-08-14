@@ -64,6 +64,7 @@
     <ClInclude Include="Core\pch.h" />
     <ClInclude Include="Graphics\FbxModel.h" />
     <ClInclude Include="Graphics\IRenderable.h" />
+    <ClInclude Include="Graphics\PipelineCache.h" />
     <ClInclude Include="Graphics\Renderer.h" />
   </ItemGroup>
   <ItemGroup>
@@ -79,6 +80,7 @@
     <ClCompile Include="Core\pch.cpp" />
     <ClCompile Include="Graphics\FbxModel.cpp" />
     <ClCompile Include="Graphics\IRenderable.cpp" />
+    <ClCompile Include="Graphics\PipelineCache.cpp" />
     <ClCompile Include="Graphics\Renderer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
