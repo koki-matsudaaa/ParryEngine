@@ -10,6 +10,11 @@ namespace Engine
         constexpr UINT kObjectStride = 256;
         constexpr UINT kMaxObjectsPerFrame = 256;
 
+        // ボーン行列 (b3)。シェーダ側が bones[128] なので合わせる。
+        constexpr UINT kMaxBones = 128;
+        constexpr UINT kBoneStride = kMaxBones * sizeof(DirectX::XMMATRIX); // 8192
+        constexpr UINT kMaxSkeletalPerFrame = 16;
+
         // CPU から毎フレーム書き込めるバッファ (アップロードヒープ) を作る。
         ID3D12Resource* CreateUploadBuffer(size_t bytes)
         {
@@ -153,6 +158,8 @@ namespace Engine
         if (m_fence) WaitForGpu();
 
         m_pipelines.Shutdown();
+        if (m_boneCB) { m_boneCB->Unmap(0, nullptr); m_boneCB->Release(); m_boneCB = nullptr; }
+        m_boneRaw = nullptr;
         if (m_objectCB) { m_objectCB->Unmap(0, nullptr); m_objectCB->Release(); m_objectCB = nullptr; }
         if (m_sceneCB) { m_sceneCB->Unmap(0, nullptr);  m_sceneCB->Release();  m_sceneCB = nullptr; }
         m_objectRaw = nullptr;
@@ -175,6 +182,7 @@ namespace Engine
     void Renderer::BeginFrame(const float clearColor[4])
     {
         m_objectIndex = 0;   // オブジェクト定数の使用位置を巻き戻す
+        m_boneIndex = 0;
         m_backBufferIndex = _swapchain->GetCurrentBackBufferIndex();
 
         // 画面に出す用 → 描画先 へ状態を移す
@@ -253,6 +261,21 @@ namespace Engine
         if (FAILED(m_objectCB->Map(0, nullptr,
             reinterpret_cast<void**>(&m_objectRaw)))) return false;
 
+        // b3 : ボーン行列。1体ぶんずつ場所を分けておく。
+        m_boneCB = CreateUploadBuffer(kBoneStride * kMaxSkeletalPerFrame);
+        if (!m_boneCB) return false;
+        if (FAILED(m_boneCB->Map(0, nullptr,
+            reinterpret_cast<void**>(&m_boneRaw)))) return false;
+
+        // 全体を単位行列で埋めておく。
+        // 実際のボーン数がシェーダの 128 に満たない場合、
+        // 余った部分が未初期化のまま参照されるとモデルが飛び散る。
+        {
+            auto* m = reinterpret_cast<DirectX::XMMATRIX*>(m_boneRaw);
+            const size_t total = (kBoneStride * kMaxSkeletalPerFrame) / sizeof(DirectX::XMMATRIX);
+            for (size_t i = 0; i < total; i++) m[i] = DirectX::XMMatrixIdentity();
+        }
+
         return true;
     }
 
@@ -288,6 +311,28 @@ namespace Engine
             0, m_sceneCB->GetGPUVirtualAddress());
         _cmdList->SetGraphicsRootConstantBufferView(
             1, m_objectCB->GetGPUVirtualAddress() + m_objectIndex * kObjectStride);
+
+        // スキニングするパイプラインなら、必ず b3 を割り当てる。
+        // ボーン行列が取れないとき (T ポーズだけの FBX など) も
+        // 単位行列で埋めて渡す。未割り当てだとシェーダが不定値を読み、
+        // モデルが飛び散る。
+        if (model->GetPipelineType() == PipelineType::FBX &&
+            m_boneIndex < kMaxSkeletalPerFrame)
+        {
+            auto* dst = reinterpret_cast<DirectX::XMMATRIX*>(
+                m_boneRaw + m_boneIndex * kBoneStride);
+
+            const DirectX::XMMATRIX* bones = model->GetBoneMatrices();
+            const size_t boneCount = model->GetBoneMatrixCount();
+            const size_t n = (boneCount < kMaxBones) ? boneCount : kMaxBones;
+
+            for (size_t i = 0; i < n; i++)         dst[i] = bones[i];
+            for (size_t i = n; i < kMaxBones; i++) dst[i] = DirectX::XMMatrixIdentity();
+
+            _cmdList->SetGraphicsRootConstantBufferView(
+                3, m_boneCB->GetGPUVirtualAddress() + m_boneIndex * kBoneStride);
+            m_boneIndex++;
+        }
 
         // 頂点バッファとテクスチャの割り当ては、モデル自身が行う。
         model->Draw(_cmdList);

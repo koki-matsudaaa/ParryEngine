@@ -79,13 +79,15 @@ namespace Engine
 
     bool PipelineCache::Initialize()
     {
-        if (!CreateRootSignature())  return false;
-        if (!CreateStaticPipeline()) return false;
+        if (!CreateRootSignature())    return false;
+        if (!CreateStaticPipeline())   return false;
+        if (!CreateSkeletalPipeline()) return false;
         return true;
     }
 
     void PipelineCache::Shutdown()
     {
+        if (m_skeletalPso) { m_skeletalPso->Release(); m_skeletalPso = nullptr; }
         if (m_staticPso) { m_staticPso->Release();     m_staticPso = nullptr; }
         if (m_rootSignature) { m_rootSignature->Release(); m_rootSignature = nullptr; }
     }
@@ -95,7 +97,8 @@ namespace Engine
         switch (type)
         {
         case PipelineType::Static: return m_staticPso;
-        default:                   return nullptr;  // FBX / PMD は後で追加
+        case PipelineType::FBX:    return m_skeletalPso;
+        default:                   return nullptr;  // PMD は使わない
         }
     }
 
@@ -216,6 +219,58 @@ namespace Engine
         ps->Release();
 
         if (FAILED(hr)) OutputDebugStringA("static PSO creation failed\n");
+        return SUCCEEDED(hr);
+    }
+
+    bool PipelineCache::CreateSkeletalPipeline()
+    {
+        ID3DBlob* vs = nullptr;
+        ID3DBlob* ps = nullptr;
+
+        if (!CompileShader(L"Engine/Graphics/Shaders/FbxVertexShader.hlsl",
+            "FbxVS", "vs_5_0", &vs)) return false;
+        if (!CompileShader(L"Engine/Graphics/Shaders/FbxPixelShader.hlsl",
+            "FbxPS", "ps_5_0", &ps))
+        {
+            vs->Release();
+            return false;
+        }
+
+        // Static の頂点構造に、影響するボーン番号と重みを足したもの。
+        D3D12_INPUT_ELEMENT_DESC layout[] = {
+            { "POSITION",    0, DXGI_FORMAT_R32G32B32_FLOAT,    0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "NORMAL",      0, DXGI_FORMAT_R32G32B32_FLOAT,    0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "TEXCOORD",    0, DXGI_FORMAT_R32G32_FLOAT,       0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "BONE_INDEX",  0, DXGI_FORMAT_R32G32B32A32_UINT,  0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "BONE_WEIGHT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        };
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = MakeBaseDesc();
+        desc.VS.pShaderBytecode = vs->GetBufferPointer();
+        desc.VS.BytecodeLength = vs->GetBufferSize();
+        desc.PS.pShaderBytecode = ps->GetBufferPointer();
+        desc.PS.BytecodeLength = ps->GetBufferSize();
+        desc.InputLayout.pInputElementDescs = layout;
+        desc.InputLayout.NumElements = _countof(layout);
+        desc.pRootSignature = m_rootSignature;
+
+        HRESULT hr = _dev->CreateGraphicsPipelineState(&desc,
+            IID_PPV_ARGS(&m_skeletalPso));
+
+        vs->Release();
+        ps->Release();
+
+        if (FAILED(hr)) OutputDebugStringA("skeletal PSO creation failed\n");
         return SUCCEEDED(hr);
     }
 }

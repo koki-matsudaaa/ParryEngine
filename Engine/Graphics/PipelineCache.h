@@ -37,8 +37,10 @@ namespace Engine
     private:
         bool CreateRootSignature();
         bool CreateStaticPipeline();
+        bool CreateSkeletalPipeline();
 
         ID3D12RootSignature* m_rootSignature = nullptr;
         ID3D12PipelineState* m_staticPso = nullptr;
+        ID3D12PipelineState* m_skeletalPso = nullptr;
     };
 }

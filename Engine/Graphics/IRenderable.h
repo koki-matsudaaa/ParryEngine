@@ -22,4 +22,10 @@ public:
     // 自分をどのパイプラインで描くべきか答える。
     // 描画ループはこれを見て、種別が変わったときだけパイプラインを切り替える。
     virtual PipelineType GetPipelineType() const = 0;
+
+    // スキニングを使うモデルは、今のポーズのボーン行列を返す。
+    // 使わないモデル (地形など) は既定のまま nullptr でよい。
+    // 描画側はこれを見て、必要なときだけ b3 に流し込む。
+    virtual const XMMATRIX* GetBoneMatrices() const { return nullptr; }
+    virtual size_t          GetBoneMatrixCount() const { return 0; }
 };

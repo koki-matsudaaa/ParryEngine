@@ -58,6 +58,18 @@ public:
     // ボーン数 (定数バッファのサイズ決めに使う)。
     size_t GetBoneCount() const { return m_bones.size(); }
 
+    // IRenderable として、今のポーズを描画側へ渡す。
+    const XMMATRIX* GetBoneMatrices() const override
+    {
+        const auto& mats = GetCurrentBoneMatrices();
+        return mats.empty() ? nullptr : mats.data();
+    }
+
+    size_t GetBoneMatrixCount() const override
+    {
+        return GetCurrentBoneMatrices().size();
+    }
+
     // 地形などボーンの無いモデルは Static パイプラインで描く。
     PipelineType GetPipelineType() const override
     {

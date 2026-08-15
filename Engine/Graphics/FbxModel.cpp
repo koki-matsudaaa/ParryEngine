@@ -397,18 +397,62 @@ XMMATRIX FbxModel::ToXMMatrix(const FbxAMatrix& m)
     return out;
 }
 
-// アニメーションを一定間隔で焼き込む (段3・方式A)。
+// アニメーションを一定間隔で焼き込む
 void FbxModel::BakeAnimation(FbxScene* scene)
 {
-    // アニメーションスタック (アニメの塊) を取得。Mixamoは通常1つ。
     int stackCount = scene->GetSrcObjectCount<FbxAnimStack>();
     if (stackCount == 0)
     {
         OutputDebugStringA("No animation found\n");
         return;
     }
-    FbxAnimStack* stack = scene->GetSrcObject<FbxAnimStack>(0);
+
+    // アニメーションスタックを選ぶ。
+    // Mixamo の FBX は、空の "Take 001" と実データの入ったスタックを
+    // 両方持っていることがある。0番目を無条件に使うと、キーが1つも無い
+    // スタックを掴んでしまい、どの時刻を評価してもバインドポーズ
+    // (= T ポーズ) が返る。
+    // そこで「実際にカーブを持っているスタック」を選ぶ。
+    FbxAnimStack* stack = nullptr;
+    for (int i = 0; i < stackCount; i++)
+    {
+        FbxAnimStack* s = scene->GetSrcObject<FbxAnimStack>(i);
+        if (!s) continue;
+
+        int curveNodes = 0;
+        const int layerCount = s->GetMemberCount<FbxAnimLayer>();
+        for (int l = 0; l < layerCount; l++)
+        {
+            FbxAnimLayer* layer = s->GetMember<FbxAnimLayer>(l);
+            if (layer) curveNodes += layer->GetMemberCount<FbxAnimCurveNode>();
+        }
+
+        char dbg[256];
+        sprintf_s(dbg, "  stack[%d] \"%s\" layers=%d curves=%d\n",
+            i, s->GetName(), layerCount, curveNodes);
+        OutputDebugStringA(dbg);
+
+        if (curveNodes > 0 && !stack) stack = s;   // 最初に見つかった実データ
+    }
+
+    // 1つも見つからなければ従来どおり0番目を使う。
+    if (!stack) stack = scene->GetSrcObject<FbxAnimStack>(0);
+
     scene->SetCurrentAnimationStack(stack);
+
+    // 評価器のキャッシュを捨てる。
+    // アニメーションスタックを設定しても、それ以前にノードの変換を
+    // 一度でも取っていると、古い結果 (バインドポーズ) が返り続けることがある。
+    scene->GetAnimationEvaluator()->Reset();
+
+    // どのアニメを、どの時間範囲で焼こうとしているのか出しておく。
+    {
+        char dbg[256];
+        sprintf_s(dbg, "AnimStack[%d]: \"%s\"  layers=%d\n",
+            stackCount, stack->GetName(),
+            stack->GetMemberCount<FbxAnimLayer>());
+        OutputDebugStringA(dbg);
+    }
 
     // アニメの時間範囲を取得。
     FbxTimeSpan span = stack->GetLocalTimeSpan();
@@ -418,6 +462,12 @@ void FbxModel::BakeAnimation(FbxScene* scene)
     double startSec = start.GetSecondDouble();
     double endSec = end.GetSecondDouble();
     m_animDuration = static_cast<float>(endSec - startSec);
+
+    {
+        char dbg[128];
+        sprintf_s(dbg, "span %.3f .. %.3f sec\n", startSec, endSec);
+        OutputDebugStringA(dbg);
+    }
 
     // 1/fps 間隔でサンプリングするフレーム数。
     int frameCount = static_cast<int>(m_animDuration * m_animFps) + 1;

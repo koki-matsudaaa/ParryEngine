@@ -76,6 +76,10 @@ namespace Engine
         uint8_t* m_objectRaw = nullptr;
         UINT            m_objectIndex = 0;   // 今フレームで何個目か
 
+        ID3D12Resource* m_boneCB = nullptr;
+        uint8_t* m_boneRaw = nullptr;
+        UINT            m_boneIndex = 0;
+
         PipelineCache m_pipelines;
         std::vector<ID3D12Resource*> m_backBuffers;
         ID3D12DescriptorHeap* m_rtvHeap = nullptr;
