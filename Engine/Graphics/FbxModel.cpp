@@ -408,11 +408,6 @@ void FbxModel::BakeAnimation(FbxScene* scene)
     }
 
     // アニメーションスタックを選ぶ。
-    // Mixamo の FBX は、空の "Take 001" と実データの入ったスタックを
-    // 両方持っていることがある。0番目を無条件に使うと、キーが1つも無い
-    // スタックを掴んでしまい、どの時刻を評価してもバインドポーズ
-    // (= T ポーズ) が返る。
-    // そこで「実際にカーブを持っているスタック」を選ぶ。
     FbxAnimStack* stack = nullptr;
     for (int i = 0; i < stackCount; i++)
     {
@@ -440,9 +435,7 @@ void FbxModel::BakeAnimation(FbxScene* scene)
 
     scene->SetCurrentAnimationStack(stack);
 
-    // 評価器のキャッシュを捨てる。
-    // アニメーションスタックを設定しても、それ以前にノードの変換を
-    // 一度でも取っていると、古い結果 (バインドポーズ) が返り続けることがある。
+    // 評価器のキャッシュを捨てる。一度でも取っていると、古い結果 (バインドポーズ) が返り続けることがある。
     scene->GetAnimationEvaluator()->Reset();
 
     // どのアニメを、どの時間範囲で焼こうとしているのか出しておく。
@@ -462,7 +455,6 @@ void FbxModel::BakeAnimation(FbxScene* scene)
     double startSec = start.GetSecondDouble();
     double endSec = end.GetSecondDouble();
     m_animDuration = static_cast<float>(endSec - startSec);
-
     {
         char dbg[128];
         sprintf_s(dbg, "span %.3f .. %.3f sec\n", startSec, endSec);

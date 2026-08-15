@@ -1,5 +1,6 @@
 ﻿#include "Engine/Core/Application.h"
 #include "Engine/Graphics/FbxModel.h"
+#include "Engine/Graphics/Camera.h"
 
 #include <cstdio>
 
@@ -16,6 +17,7 @@ class GameApp : public Engine::Application
 
     FbxModel m_terrain;
     FbxModel m_character;
+    Engine::Camera m_camera;
 
 protected:
     bool OnStart() override
@@ -27,6 +29,10 @@ protected:
             std::printf("FBX の読み込みに失敗しました\n");
             return false;
         }
+
+        m_camera.SetTarget(XMFLOAT3(0.0f, 0.0f, 0.0f));
+        m_camera.SetDistance(4.0f);
+        std::printf("矢印キーでカメラを回せます\n");
 
         // ボーンを持たないメッシュなので Static パイプラインで描く。
         m_terrain.SetStaticPipeline(true);
@@ -77,29 +83,23 @@ protected:
 
     void OnUpdate(float dt) override
     {
-        // dt は常に 1/60 秒。アニメの進み方がPCの速さに左右されない。
         m_character.UpdateAnimation(dt);
+
+        // 矢印キーでカメラを回す。
+        // dt は常に 1/60 秒なので、回転速度は「秒あたり何ラジアン」で決まる。
+        // 入力の仕組みは後で Engine/Input に作る。ここは仮。
+        const float rotSpeed = 2.0f;   // ラジアン/秒
+        if (GetAsyncKeyState(VK_LEFT) & 0x8000) m_camera.AddYaw(-rotSpeed * dt);
+        if (GetAsyncKeyState(VK_RIGHT) & 0x8000) m_camera.AddYaw(+rotSpeed * dt);
+        if (GetAsyncKeyState(VK_UP) & 0x8000) m_camera.AddPitch(-rotSpeed * dt);
+        if (GetAsyncKeyState(VK_DOWN) & 0x8000) m_camera.AddPitch(+rotSpeed * dt);
     }
 
     void OnRender(float alpha) override
     {
         (void)alpha;
 
-        // 身長 1.8m のキャラを、少し上から後ろ気味に見る。
-        const XMVECTOR eye = XMVectorSet(0.0f, 1.6f, -4.0f, 1.0f);
-        const XMVECTOR target = XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f);
-        const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-
-        const XMMATRIX view = XMMatrixLookAtLH(eye, target, up);
-
-        // 近クリップは 0.1m。1m のままだと足元が切れる。
-        const XMMATRIX proj = XMMatrixPerspectiveFovLH(
-            XM_PIDIV4, 1280.0f / 720.0f, 0.1f, 500.0f);
-
-        XMFLOAT3 eyePos;
-        XMStoreFloat3(&eyePos, eye);
-
-        GetRenderer().SetCamera(view, proj, eyePos);
+        GetRenderer().SetCamera(m_camera.View(), m_camera.Projection(), m_camera.Eye());
 
         GetRenderer().DrawModel(&m_terrain,
             XMMatrixScaling(kTerrainScale, kTerrainScale, kTerrainScale));
