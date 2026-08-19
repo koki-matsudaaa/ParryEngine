@@ -59,25 +59,6 @@ protected:
         std::printf("キャラ範囲 X[%.1f .. %.1f]  Y[%.1f .. %.1f]  Z[%.1f .. %.1f]\n",
             cmn.x, cmx.x, cmn.y, cmx.y, cmn.z, cmx.z);
 
-        // アニメが実際に姿勢を変えているか確認する。
-        // 全フレームが同じなら、焼き込みが効いていない。
-        {
-            m_character.SetFixedFrame(0);
-            XMFLOAT4X4 f0;
-            XMStoreFloat4x4(&f0, m_character.GetCurrentBoneMatrices()[5]);
-
-            m_character.SetFixedFrame(25);
-            XMFLOAT4X4 f25;
-            XMStoreFloat4x4(&f25, m_character.GetCurrentBoneMatrices()[5]);
-
-            m_character.SetFixedFrame(-1);   // 通常再生に戻す
-
-            std::printf("frame0  ボーン5 の移動量 (%.3f, %.3f, %.3f)\n",
-                f0._41, f0._42, f0._43);
-            std::printf("frame25 ボーン5 の移動量 (%.3f, %.3f, %.3f)\n",
-                f25._41, f25._42, f25._43);
-        }
-
         return true;
     }
 
@@ -86,8 +67,6 @@ protected:
         m_character.UpdateAnimation(dt);
 
         // 矢印キーでカメラを回す。
-        // dt は常に 1/60 秒なので、回転速度は「秒あたり何ラジアン」で決まる。
-        // 入力の仕組みは後で Engine/Input に作る。ここは仮。
         const float rotSpeed = 2.0f;   // ラジアン/秒
         if (GetAsyncKeyState(VK_LEFT) & 0x8000) m_camera.AddYaw(-rotSpeed * dt);
         if (GetAsyncKeyState(VK_RIGHT) & 0x8000) m_camera.AddYaw(+rotSpeed * dt);

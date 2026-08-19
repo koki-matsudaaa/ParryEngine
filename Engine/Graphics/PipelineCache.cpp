@@ -79,9 +79,15 @@ namespace Engine
 
     bool PipelineCache::Initialize()
     {
-        if (!CreateRootSignature())    return false;
-        if (!CreateStaticPipeline())   return false;
-        if (!CreateSkeletalPipeline()) return false;
+        if (!CreateRootSignature())    
+            return false;
+
+        if (!CreateStaticPipeline())   
+            return false;
+
+        if (!CreateSkeletalPipeline()) 
+            return false;
+
         return true;
     }
 
@@ -114,23 +120,23 @@ namespace Engine
 
         D3D12_ROOT_PARAMETER params[4] = {};
 
-        // [0] b0 : シーン定数 (view / proj / eye)
+        // b0 : シーン定数 (view / proj / eye)
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor.ShaderRegister = 0;
         params[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-        // [1] b2 : オブジェクト定数 (world)
+        // b2 : オブジェクト定数 (world)
         params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[1].Descriptor.ShaderRegister = 2;
         params[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
-        // [2] t0 : テクスチャ
+        // t0 : テクスチャ
         params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         params[2].DescriptorTable.pDescriptorRanges = &range;
         params[2].DescriptorTable.NumDescriptorRanges = 1;
         params[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-        // [3] b3 : ボーン行列 (スキニング用。Static では使わない)
+        // b3 : ボーン行列 (スキニング用。Static では使わない)
         params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[3].Descriptor.ShaderRegister = 3;
         params[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
@@ -175,14 +181,13 @@ namespace Engine
 
     bool PipelineCache::CreateStaticPipeline()
     {
-        // 実行時のカレントはソリューションのルート。
-        // ソースから直接コンパイルしているので、シェーダを書き換えたら
-        // 再起動するだけで反映される (将来のホットリロードの下地)。
         ID3DBlob* vs = nullptr;
         ID3DBlob* ps = nullptr;
 
         if (!CompileShader(L"Engine/Graphics/Shaders/StaticVertexShader.hlsl",
-            "StaticVS", "vs_5_0", &vs)) return false;
+            "StaticVS", "vs_5_0", &vs)) 
+            return false;
+
         if (!CompileShader(L"Engine/Graphics/Shaders/StaticPixelShader.hlsl",
             "StaticPS", "ps_5_0", &ps))
         {
@@ -228,7 +233,9 @@ namespace Engine
         ID3DBlob* ps = nullptr;
 
         if (!CompileShader(L"Engine/Graphics/Shaders/FbxVertexShader.hlsl",
-            "FbxVS", "vs_5_0", &vs)) return false;
+            "FbxVS", "vs_5_0", &vs)) 
+            return false;
+
         if (!CompileShader(L"Engine/Graphics/Shaders/FbxPixelShader.hlsl",
             "FbxPS", "ps_5_0", &ps))
         {

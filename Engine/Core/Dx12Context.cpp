@@ -94,7 +94,8 @@ void EnableDebugLayer() {
 HRESULT InitializeDXGIDevice() {
     UINT flagsDXGI = DXGI_CREATE_FACTORY_DEBUG;
     auto result = CreateDXGIFactory2(flagsDXGI, IID_PPV_ARGS(&_dxgiFactory));
-    if (FAILED(result)) return result;
+    if (FAILED(result)) 
+        return result;
 
     D3D_FEATURE_LEVEL levels[] = {
         D3D_FEATURE_LEVEL_12_1,
@@ -133,12 +134,16 @@ HRESULT InitializeDXGIDevice() {
 HRESULT InitializeCommand() {
     auto result = _dev->CreateCommandAllocator(
         D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&_cmdAllocator));
-    if (FAILED(result)) { assert(0); return result; }
+    if (FAILED(result)) { 
+        assert(0); return result;
+    }
 
     result = _dev->CreateCommandList(
         0, D3D12_COMMAND_LIST_TYPE_DIRECT, _cmdAllocator, nullptr,
         IID_PPV_ARGS(&_cmdList));
-    if (FAILED(result)) { assert(0); return result; }
+    if (FAILED(result)) { 
+        assert(0); return result;
+    }
 
     D3D12_COMMAND_QUEUE_DESC cmdQueueDesc = {};
     cmdQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -146,7 +151,9 @@ HRESULT InitializeCommand() {
     cmdQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
     cmdQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
     result = _dev->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(&_cmdQueue));
-    if (FAILED(result)) { assert(0); }
+    if (FAILED(result)) {
+        assert(0);
+    }
     return S_OK;
 }
 

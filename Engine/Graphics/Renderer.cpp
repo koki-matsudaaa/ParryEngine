@@ -45,12 +45,19 @@ namespace Engine
     bool Renderer::Initialize(HWND hwnd)
     {
 #ifdef _DEBUG
-        EnableDebugLayer();   // デバイス生成より前に呼ぶ必要がある
+        EnableDebugLayer();   // GPUの使い方の誤りを出力ウィンドウに表示
 #endif
-        if (FAILED(InitializeDXGIDevice()))               return false;
-        if (FAILED(InitializeCommand()))                  return false;
-        if (FAILED(CreateSwapChain(hwnd, _dxgiFactory)))  return false;
-        if (FAILED(CreateFinalRenderTarget(m_rtvHeap, m_backBuffers))) return false;
+        if (FAILED(InitializeDXGIDevice()))               
+            return false;
+
+        if (FAILED(InitializeCommand()))                  
+            return false;
+
+        if (FAILED(CreateSwapChain(hwnd, _dxgiFactory)))  
+            return false;
+
+        if (FAILED(CreateFinalRenderTarget(m_rtvHeap, m_backBuffers))) 
+            return false;
 
         // ── 深度バッファ ──────────────────────────
         D3D12_RESOURCE_DESC depthResDesc = {};
@@ -146,8 +153,11 @@ namespace Engine
         m_scissor.bottom = static_cast<LONG>(window_height);
 
         // ── シェーダとパイプライン ──────────────────
-        if (!m_pipelines.Initialize()) return false;
-        if (!CreateConstantBuffers()) return false;
+        if (!m_pipelines.Initialize()) 
+            return false;
+
+        if (!CreateConstantBuffers()) 
+            return false;
 
         return true;
     }
@@ -249,23 +259,32 @@ namespace Engine
     {
         // b0 : カメラ。1フレームに1回だけ書く。
         m_sceneCB = CreateUploadBuffer((sizeof(SceneConstants) + 255) & ~255u);
-        if (!m_sceneCB) return false;
+        if (!m_sceneCB) 
+            return false;
+
         if (FAILED(m_sceneCB->Map(0, nullptr,
-            reinterpret_cast<void**>(&m_sceneMap)))) return false;
+            reinterpret_cast<void**>(&m_sceneMap)))) 
+            return false;
 
         // b2 : オブジェクトごとの world。
         // 1フレームに複数描けるよう、256バイト刻みで並べて確保しておく。
         // 1つしか用意しないと、後から書いた world で全部が上書きされてしまう。
         m_objectCB = CreateUploadBuffer(kObjectStride * kMaxObjectsPerFrame);
-        if (!m_objectCB) return false;
+        if (!m_objectCB) 
+            return false;
+
         if (FAILED(m_objectCB->Map(0, nullptr,
-            reinterpret_cast<void**>(&m_objectRaw)))) return false;
+            reinterpret_cast<void**>(&m_objectRaw)))) 
+            return false;
 
         // b3 : ボーン行列。1体ぶんずつ場所を分けておく。
         m_boneCB = CreateUploadBuffer(kBoneStride * kMaxSkeletalPerFrame);
-        if (!m_boneCB) return false;
+        if (!m_boneCB) 
+            return false;
+
         if (FAILED(m_boneCB->Map(0, nullptr,
-            reinterpret_cast<void**>(&m_boneRaw)))) return false;
+            reinterpret_cast<void**>(&m_boneRaw)))) 
+            return false;
 
         // 全体を単位行列で埋めておく。
         // 実際のボーン数がシェーダの 128 に満たない場合、

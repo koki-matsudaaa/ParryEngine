@@ -7,14 +7,16 @@ namespace Engine
 {
     int Application::Run()
     {
-        // /utf-8 でコンパイルしているので文字列リテラルは UTF-8。
-        // Windows のコンソールは既定で CP932 なので、合わせておかないと化ける。
+        // 文字化け対策
         SetConsoleOutputCP(CP_UTF8);
 
-        // テクスチャ読み込み (WIC) が COM を使うので先に初期化する。
+        // COMライブラリの初期化（テクスチャ読み込み時に使用するため）
         CoInitializeEx(nullptr, COINIT_MULTITHREADED);
 
+        // ウィンドウ生成
         CreateGameWindow(m_hwnd, m_windowClass);
+
+        // 表示
         ShowWindow(m_hwnd, SW_SHOW);
 
         if (!m_renderer.Initialize(m_hwnd))
