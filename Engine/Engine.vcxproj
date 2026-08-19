@@ -58,10 +58,32 @@
        進捗は MIGRATION.md を参照。
        ==================================================================== -->
   <ItemGroup>
+    <ClInclude Include="Core\Application.h" />
+    <ClInclude Include="Core\Dx12Context.h" />
     <ClInclude Include="Core\FixedTimestep.h" />
+    <ClInclude Include="Core\pch.h" />
+    <ClInclude Include="Graphics\Camera.h" />
+    <ClInclude Include="Graphics\FbxModel.h" />
+    <ClInclude Include="Graphics\IRenderable.h" />
+    <ClInclude Include="Graphics\PipelineCache.h" />
+    <ClInclude Include="Graphics\Renderer.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\lib\imgui\imgui.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_draw.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_impl_dx12.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_impl_win32.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_tables.cpp" />
+    <ClCompile Include="..\lib\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Core\Application.cpp" />
+    <ClCompile Include="Core\Dx12Context.cpp" />
     <ClCompile Include="Core\FixedTimestep.cpp" />
+    <ClCompile Include="Core\pch.cpp" />
+    <ClCompile Include="Graphics\Camera.cpp" />
+    <ClCompile Include="Graphics\FbxModel.cpp" />
+    <ClCompile Include="Graphics\IRenderable.cpp" />
+    <ClCompile Include="Graphics\PipelineCache.cpp" />
+    <ClCompile Include="Graphics\Renderer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
