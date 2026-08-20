@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "Engine/Core/Dx12Context.h"
 #include "Engine/Graphics/IRenderable.h"
+#include "Engine/Animation/AnimationClip.h"
 #include <fbxsdk.h>
 #include <vector>
 #include <string>
@@ -16,6 +17,8 @@ class FbxModel : public IRenderable
 {
 public:
 
+    using AnimationClip = Engine::AnimationClip;
+
     struct FbxVtx
     {
         XMFLOAT3 position;
@@ -30,21 +33,28 @@ public:
     {
         std::string name;                    // ボーン名
         XMMATRIX    bindInverse;             // バインドポーズの逆行列
-        FbxNode* node = nullptr;          // 対応するFBXノード (後でアニメ計算に使う)
-    };
-
-    // アニメーション。各フレームに、全ボーンの姿勢行列を持つ。
-    struct AnimFrame
-    {
-        std::vector<XMMATRIX> boneMatrices; // ボーンごとの最終行列 (ボーン数ぶん)
     };
 
     FbxModel() = default;
     ~FbxModel() = default;
 
-    // FBXファイルを読み込み、GPUリソースを構築する。
-    // path: FBXファイル。texturePath: 貼るテクスチャ(空なら既定のRobotテクスチャ)。
-    bool Load(const std::string& path, const std::string& texturePath = "");
+    // FBXを読み込み、GPUリソースを構築する。
+    // メッシュ・スケルトンに加え、アニメが入っていれば1本クリップとして登録する。
+    bool Load(const std::string& path,
+        const std::string& texturePath = "",
+        const std::string& defaultClipName = "Default");
+
+    // 別のFBXからモーションだけを読み、クリップとして追加する。
+    // メッシュは読まない。既に読んであるスケルトンにボーン名で対応づける。
+    bool LoadClip(const std::string& name, const std::string& path);
+
+    // 再生するクリップを切り替える。先頭から再生し直す。
+    bool Play(const std::string& name);
+
+    // 今再生しているクリップ名 (無ければ空)。
+    const std::string& CurrentClipName() const;
+
+    size_t GetClipCount() const { return m_clips.size(); }
 
     // 描画コマンドを積む (IRenderable)。
     void Draw(ID3D12GraphicsCommandList* cmdList) override;
@@ -87,13 +97,13 @@ public:
     // -1 を渡すと固定解除 (通常のアニメ再生に戻る)。
     void SetFixedFrame(int frameIndex) { m_fixedFrame = frameIndex; }
 
-    // 焼き込まれたフレーム数 (どのフレームがあるか調べる用)。
-    int GetFrameCount() const { return (int)m_animFrames.size(); }
+    // 今のクリップのフレーム数。
+    int GetFrameCount() const;
 
     const std::vector<FbxVtx>& GetVertices() const { return m_vertices; }
     const std::vector<unsigned int>& GetIndices() const { return m_indices; }
     // アニメを先頭に巻き戻す (リスタート時に前回の再生位置を持ち越さないため)。
-    void ResetAnimation() { m_animTime = 0.0f; }
+    void ResetAnimation() { m_time = 0.0f; }
 
 private:
     // FbxManager は SDK 全体で1つあれば足りるので static 共有する。
@@ -116,7 +126,12 @@ private:
     XMMATRIX ToXMMatrix(const FbxAMatrix& m);
 
     // アニメーションを一定間隔で焼き込む。
-    void BakeAnimation(FbxScene* scene);
+    bool BakeClip(FbxScene* scene, AnimationClip& clip);
+
+    // クリップを登録する。同名があれば差し替える。
+    void AddClip(AnimationClip&& clip);
+
+    std::string m_path;   // 読み込み元のパス。ログでどのモデルか分かるように
 
     std::vector<FbxVtx>        m_vertices; // 全メッシュ分をまとめて持つ
     std::vector<unsigned int>  m_indices;
@@ -124,11 +139,11 @@ private:
     std::vector<Bone> m_bones;                       // ボーン一覧
     std::map<std::string, int> m_boneIndexByName;    // 名前 → ボーン番号
 
-    std::vector<AnimFrame> m_animFrames; // 全フレーム
-    float m_animFps = 30.0f;             // 1秒あたりのフレーム数
-    float m_animDuration = 0.0f;         // アニメの長さ (秒)
-    float m_animTime = 0.0f;             // 現在の再生時刻
-    int m_fixedFrame = -1;
+    std::vector<AnimationClip> m_clips;           // 読み込んだモーション一覧
+    std::map<std::string, int> m_clipIndexByName; // 名前 → クリップ番号
+    int   m_currentClip = -1;                     // 今再生中 (-1 = 無し)
+    float m_time = 0.0f;                          // 現在の再生時刻 (秒)
+    int   m_fixedFrame = -1;                      // デバッグ用のフレーム固定
 
     // GPUリソース
     ID3D12Resource* m_vertBuff = nullptr;

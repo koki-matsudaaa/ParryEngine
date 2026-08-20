@@ -2,6 +2,18 @@
 #include "Engine/Graphics/FbxModel.h"
 #include <cfloat>
 
+namespace
+{
+    // シーンの全ノードを名前で引けるようにする。
+    void CollectNodes(FbxNode* node, std::map<std::string, FbxNode*>& out)
+    {
+        if (!node) return;
+        out[node->GetName()] = node;
+        for (int i = 0; i < node->GetChildCount(); i++)
+            CollectNodes(node->GetChild(i), out);
+    }
+}
+
 // ──────────────────────────────────────────
 // FbxManager の共有 (SDK全体で1つ)
 // ──────────────────────────────────────────
@@ -22,8 +34,10 @@ FbxManager* FbxModel::GetSharedManager()
 // ──────────────────────────────────────────
 // 読み込み本体
 // ──────────────────────────────────────────
-bool FbxModel::Load(const std::string& path, const std::string& texturePath)
+bool FbxModel::Load(const std::string& path, const std::string& texturePath, const std::string& defaultClipName)
 {
+    m_path = path;
+
     FbxManager* manager = GetSharedManager();
 
     // インポータを作る。
@@ -68,11 +82,15 @@ bool FbxModel::Load(const std::string& path, const std::string& texturePath)
         }
     }
 
-    // scene->Destroy();前に、アニメを焼き込む
-    BakeAnimation(scene);
+    // アニメが入っていればクリップとして登録する。
+    // Mixamo の "Without Skin" のようにアニメだけのファイルもあるので、
+    // 入っていなくてもエラーにはしない。
+    {
+        AnimationClip clip;
+        clip.name = defaultClipName;
+        if (BakeClip(scene, clip)) AddClip(std::move(clip));
+    }
 
-    // テクスチャを読み込む　自動
-    //std::string texPath = ExtractTexturePath(scene);
     // テクスチャを読み込む 直接
     // テクスチャパス: 引数で指定があればそれを、無ければ既定(Robot)を使う。
     std::string texPath = texturePath.empty()
@@ -282,7 +300,6 @@ void FbxModel::ReadBones(FbxMesh* mesh)
             // 自前のBone構造体に格納。
             Bone bone;
             bone.name = boneName;
-            bone.node = boneNode;
             bone.bindInverse = ToXMMatrix(bindInverse); // FbxAMatrix → XMMATRIX 変換
 
             int index = static_cast<int>(m_bones.size());
@@ -397,103 +414,160 @@ XMMATRIX FbxModel::ToXMMatrix(const FbxAMatrix& m)
     return out;
 }
 
-// アニメーションを一定間隔で焼き込む
-void FbxModel::BakeAnimation(FbxScene* scene)
+bool FbxModel::BakeClip(FbxScene* scene, AnimationClip& clip)
 {
-    int stackCount = scene->GetSrcObjectCount<FbxAnimStack>();
-    if (stackCount == 0)
-    {
-        OutputDebugStringA("No animation found\n");
-        return;
-    }
+    const int stackCount = scene->GetSrcObjectCount<FbxAnimStack>();
+    if (stackCount == 0) return false;
 
-    // アニメーションスタックを選ぶ。
+    // カーブ (実際のキー) を持つスタックを選ぶ。
+    // Mixamo は空の "Take 001" が先頭に入っていることがあり、
+    // それを掴むとどの時刻を評価してもバインドポーズが返る。
     FbxAnimStack* stack = nullptr;
     for (int i = 0; i < stackCount; i++)
     {
         FbxAnimStack* s = scene->GetSrcObject<FbxAnimStack>(i);
         if (!s) continue;
 
-        int curveNodes = 0;
-        const int layerCount = s->GetMemberCount<FbxAnimLayer>();
-        for (int l = 0; l < layerCount; l++)
-        {
-            FbxAnimLayer* layer = s->GetMember<FbxAnimLayer>(l);
-            if (layer) curveNodes += layer->GetMemberCount<FbxAnimCurveNode>();
-        }
+        int curves = 0;
+        const int layers = s->GetMemberCount<FbxAnimLayer>();
+        for (int l = 0; l < layers; l++)
+            if (FbxAnimLayer* layer = s->GetMember<FbxAnimLayer>(l))
+                curves += layer->GetMemberCount<FbxAnimCurveNode>();
 
-        char dbg[256];
-        sprintf_s(dbg, "  stack[%d] \"%s\" layers=%d curves=%d\n",
-            i, s->GetName(), layerCount, curveNodes);
-        OutputDebugStringA(dbg);
-
-        if (curveNodes > 0 && !stack) stack = s;   // 最初に見つかった実データ
+        if (curves > 0) { stack = s; break; }
     }
-
-    // 1つも見つからなければ従来どおり0番目を使う。
-    if (!stack) stack = scene->GetSrcObject<FbxAnimStack>(0);
+    if (!stack) return false;
 
     scene->SetCurrentAnimationStack(stack);
+    scene->GetAnimationEvaluator()->Reset();   // 古い評価結果を捨てる
 
-    // 評価器のキャッシュを捨てる。一度でも取っていると、古い結果 (バインドポーズ) が返り続けることがある。
-    scene->GetAnimationEvaluator()->Reset();
+    const FbxTimeSpan span = stack->GetLocalTimeSpan();
+    const double startSec = span.GetStart().GetSecondDouble();
+    const double endSec = span.GetStop().GetSecondDouble();
 
-    // どのアニメを、どの時間範囲で焼こうとしているのか出しておく。
-    {
-        char dbg[256];
-        sprintf_s(dbg, "AnimStack[%d]: \"%s\"  layers=%d\n",
-            stackCount, stack->GetName(),
-            stack->GetMemberCount<FbxAnimLayer>());
-        OutputDebugStringA(dbg);
-    }
+    clip.fps = 30.0f;
+    clip.duration = static_cast<float>(endSec - startSec);
+    if (clip.duration <= 0.0f) return false;
 
-    // アニメの時間範囲を取得。
-    FbxTimeSpan span = stack->GetLocalTimeSpan();
-    FbxTime start = span.GetStart();
-    FbxTime end = span.GetStop();
+    const int frameCount = static_cast<int>(clip.duration * clip.fps) + 1;
 
-    double startSec = start.GetSecondDouble();
-    double endSec = end.GetSecondDouble();
-    m_animDuration = static_cast<float>(endSec - startSec);
-    {
-        char dbg[128];
-        sprintf_s(dbg, "span %.3f .. %.3f sec\n", startSec, endSec);
-        OutputDebugStringA(dbg);
-    }
+    // このシーンのノードを名前で引けるようにする。
+    // Load のときは自分のシーン、LoadClip のときは別ファイルのシーンになる。
+    // どちらもボーン名で引くので、同じ処理で済む。
+    std::map<std::string, FbxNode*> nodes;
+    CollectNodes(scene->GetRootNode(), nodes);
 
-    // 1/fps 間隔でサンプリングするフレーム数。
-    int frameCount = static_cast<int>(m_animDuration * m_animFps) + 1;
+    clip.frames.assign(frameCount, std::vector<XMMATRIX>(m_bones.size()));
 
-    m_animFrames.resize(frameCount);
-
+    int missing = 0;
     for (int f = 0; f < frameCount; f++)
     {
-        // このフレームの時刻。
-        double timeSec = startSec + (double)f / m_animFps;
-        FbxTime evalTime;
-        evalTime.SetSecondDouble(timeSec);
+        FbxTime t;
+        t.SetSecondDouble(startSec + static_cast<double>(f) / clip.fps);
 
-        AnimFrame& frame = m_animFrames[f];
-        frame.boneMatrices.resize(m_bones.size());
-
-        // 全ボーンについて、この時刻での姿勢を計算。
         for (size_t b = 0; b < m_bones.size(); b++)
         {
-            FbxNode* boneNode = m_bones[b].node;
+            auto it = nodes.find(m_bones[b].name);
+            if (it == nodes.end())
+            {
+                // このクリップに無いボーンは動かさない。
+                clip.frames[f][b] = XMMatrixIdentity();
+                if (f == 0) missing++;
+                continue;
+            }
 
-            // この時刻での、親を全部考慮したグローバル変換。
-            FbxAMatrix globalAtTime = boneNode->EvaluateGlobalTransform(evalTime);
-
-            // スキニング用の最終行列 = グローバル変換 × バインド逆行列。
-            //   バインド時の姿勢から、今の姿勢へどう動いたかを表す。
-            XMMATRIX global = ToXMMatrix(globalAtTime);
-            frame.boneMatrices[b] = m_bones[b].bindInverse * global;
+            // 最終行列 = バインド逆行列 × その時刻のグローバル変換
+            const XMMATRIX global = ToXMMatrix(it->second->EvaluateGlobalTransform(t));
+            clip.frames[f][b] = m_bones[b].bindInverse * global;
         }
     }
 
-    char buf[64];
-    sprintf_s(buf, "Baked animation: %d frames, %.2f sec\n", frameCount, m_animDuration);
-    OutputDebugStringA(buf);
+    char dbg[256];
+    sprintf_s(dbg, "[%s] clip \"%s\" %d frames, %.2f sec, 未対応ボーン %d/%zu\n",
+        m_path.c_str(), clip.name.c_str(), frameCount, clip.duration,
+        missing, m_bones.size());
+    OutputDebugStringA(dbg);
+
+    return true;
+}
+
+void FbxModel::AddClip(AnimationClip&& clip)
+{
+    auto it = m_clipIndexByName.find(clip.name);
+    if (it != m_clipIndexByName.end())
+    {
+        m_clips[it->second] = std::move(clip);   // 同名は差し替え
+        return;
+    }
+
+    m_clipIndexByName[clip.name] = static_cast<int>(m_clips.size());
+    m_clips.push_back(std::move(clip));
+
+    // 最初の1本は自動で再生対象にする。
+    if (m_currentClip < 0) { m_currentClip = 0; m_time = 0.0f; }
+}
+
+bool FbxModel::LoadClip(const std::string& name, const std::string& path)
+{
+    // スケルトンが無いと、ボーン名で対応づけられない。
+    if (m_bones.empty())
+    {
+        OutputDebugStringA("LoadClip: 先に Load でメッシュを読んでください\n");
+        return false;
+    }
+
+    FbxManager* manager = GetSharedManager();
+
+    FbxImporter* importer = FbxImporter::Create(manager, "");
+    if (!importer->Initialize(path.c_str(), -1, manager->GetIOSettings()))
+    {
+        OutputDebugStringA(("LoadClip: 開けません " + path + "\n").c_str());
+        importer->Destroy();
+        return false;
+    }
+
+    FbxScene* scene = FbxScene::Create(manager, "clip");
+    if (!importer->Import(scene))
+    {
+        importer->Destroy();
+        scene->Destroy();
+        return false;
+    }
+    importer->Destroy();
+
+    AnimationClip clip;
+    clip.name = name;
+    const bool ok = BakeClip(scene, clip);
+
+    scene->Destroy();   // メッシュは読まないので、ここで捨てて構わない
+
+    if (!ok) return false;
+
+    AddClip(std::move(clip));
+    return true;
+}
+
+bool FbxModel::Play(const std::string& name)
+{
+    auto it = m_clipIndexByName.find(name);
+    if (it == m_clipIndexByName.end()) return false;
+
+    if (m_currentClip == it->second) return true;   // 既に再生中なら何もしない
+
+    m_currentClip = it->second;
+    m_time = 0.0f;
+    return true;
+}
+
+const std::string& FbxModel::CurrentClipName() const
+{
+    static const std::string empty;
+    return (m_currentClip >= 0) ? m_clips[m_currentClip].name : empty;
+}
+
+int FbxModel::GetFrameCount() const
+{
+    return (m_currentClip >= 0) ? m_clips[m_currentClip].FrameCount() : 0;
 }
 
 // マテリアルのディフューズに紐づくテクスチャのファイルパスを取り出す。
@@ -553,51 +627,45 @@ void FbxModel::Draw(ID3D12GraphicsCommandList* cmdList)
 // アニメの時刻を進める。末尾まで来たら先頭へループ。
 void FbxModel::UpdateAnimation(float dt)
 {
-    if (m_animFrames.empty()) return;
+    if (m_currentClip < 0) return;
 
-    m_animTime += dt;
+    const AnimationClip& clip = m_clips[m_currentClip];
+    if (clip.duration <= 0.0f) return;
 
-    // 末尾を超えたらループさせる。
-    if (m_animDuration > 0.0f)
+    m_time += dt;
+
+    if (clip.loop)
     {
-        while (m_animTime >= m_animDuration)
-            m_animTime -= m_animDuration;
+        while (m_time >= clip.duration) m_time -= clip.duration;
+    }
+    else if (m_time > clip.duration)
+    {
+        m_time = clip.duration;   // ループしないクリップは末尾で止める
     }
 }
 
 // 今の時刻に対応するフレームのボーン行列を返す。
 const std::vector<XMMATRIX>& FbxModel::GetCurrentBoneMatrices() const
 {
-    // 時刻 → フレーム番号 (一番近いフレームを選ぶ簡易版)。
     static std::vector<XMMATRIX> identityFallback;
-    if (m_animFrames.empty())
+
+    // クリップが1本も無ければ変形なし (バインドポーズのまま)。
+    if (m_currentClip < 0 || m_clips[m_currentClip].frames.empty())
     {
-        // アニメが無ければ単位行列を返す (変形なし)。
         if (identityFallback.size() != m_bones.size())
             identityFallback.assign(m_bones.size(), XMMatrixIdentity());
         return identityFallback;
     }
 
-    //int frameIndex = static_cast<int>(m_animTime * m_animFps);
-    //if (frameIndex < 0) frameIndex = 0;
-    //if (frameIndex >= (int)m_animFrames.size())
-    //    frameIndex = (int)m_animFrames.size() - 1;
+    const AnimationClip& clip = m_clips[m_currentClip];
 
-    int frameIndex;
-    if (m_fixedFrame >= 0)
-    {
-        // フレーム固定モード: 指定フレームのポーズを使う。
-        frameIndex = m_fixedFrame;
-    }
-    else
-    {
-        // 通常: 再生時刻からフレームを求める。
-        frameIndex = static_cast<int>(m_animTime * m_animFps);
-    }
+    // 時刻 → フレーム番号 (一番近いフレームを選ぶ簡易版)。
+    int frame = (m_fixedFrame >= 0)
+        ? m_fixedFrame
+        : static_cast<int>(m_time * clip.fps);
 
-    if (frameIndex < 0) frameIndex = 0;
-    if (frameIndex >= (int)m_animFrames.size())
-        frameIndex = (int)m_animFrames.size() - 1;
+    if (frame < 0) frame = 0;
+    if (frame >= clip.FrameCount()) frame = clip.FrameCount() - 1;
 
-    return m_animFrames[frameIndex].boneMatrices;
+    return clip.frames[frame];
 }

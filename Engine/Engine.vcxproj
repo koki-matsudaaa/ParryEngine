@@ -58,6 +58,7 @@
        進捗は MIGRATION.md を参照。
        ==================================================================== -->
   <ItemGroup>
+    <ClInclude Include="Animation\AnimationClip.h" />
     <ClInclude Include="Core\Application.h" />
     <ClInclude Include="Core\Dx12Context.h" />
     <ClInclude Include="Core\FixedTimestep.h" />

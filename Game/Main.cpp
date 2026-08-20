@@ -44,13 +44,23 @@ protected:
         std::printf("範囲 X[%.1f .. %.1f]  Y[%.1f .. %.1f]  Z[%.1f .. %.1f]\n",
             mn.x, mx.x, mn.y, mx.y, mn.z, mx.z);
 
-        // キャラクター (仮)。ボーンがあるので Static にはしない。
-        if (!m_character.Load("Assets/Model/Bot_Idle.fbx",
-            "Assets/Model/Robot_Base_color.png"))
+        // メッシュとスケルトンは1回だけ読む。この FBX のアニメは "Idle" になる。
+        if (!m_character.Load("Assets/Model/Bot_Idle.fbx", "", "Idle"))
         {
             std::printf("キャラクターの読み込みに失敗しました\n");
             return false;
         }
+
+        // モーションだけを追加で読む。メッシュは重複しない。
+        if (!m_character.LoadClip("Run", "Assets/Model/Bot_Run.fbx"))
+            std::printf("Run の読み込みに失敗（ファイルがまだ無い？）\n");
+        if (!m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx"))
+            std::printf("Slash の読み込みに失敗（ファイルがまだ無い？）\n");
+
+        m_character.Play("Idle");
+        std::printf("クリップ数 %zu / 再生中 %s\n",
+            m_character.GetClipCount(), m_character.CurrentClipName().c_str());
+        std::printf("1=Idle  2=Run  3=Slash で切り替え\n");
 
         const XMFLOAT3 cmn = m_character.GetMin();
         const XMFLOAT3 cmx = m_character.GetMax();
@@ -72,6 +82,11 @@ protected:
         if (GetAsyncKeyState(VK_RIGHT) & 0x8000) m_camera.AddYaw(+rotSpeed * dt);
         if (GetAsyncKeyState(VK_UP) & 0x8000) m_camera.AddPitch(-rotSpeed * dt);
         if (GetAsyncKeyState(VK_DOWN) & 0x8000) m_camera.AddPitch(+rotSpeed * dt);
+
+        // 数字キーでモーションを切り替える。
+        if (GetAsyncKeyState('1') & 0x8000) m_character.Play("Idle");
+        if (GetAsyncKeyState('2') & 0x8000) m_character.Play("Run");
+        if (GetAsyncKeyState('3') & 0x8000) m_character.Play("Slash");
     }
 
     void OnRender(float alpha) override
