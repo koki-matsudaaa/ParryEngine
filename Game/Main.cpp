@@ -53,9 +53,10 @@ protected:
 
         // モーションだけを追加で読む。メッシュは重複しない。
         if (!m_character.LoadClip("Run", "Assets/Model/Bot_Run.fbx"))
-            std::printf("Run の読み込みに失敗（ファイルがまだ無い？）\n");
-        if (!m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx"))
-            std::printf("Slash の読み込みに失敗（ファイルがまだ無い？）\n");
+            std::printf("Run の読み込みに失敗\n");
+
+        if (!m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false))
+            std::printf("Slash の読み込みに失敗\n");
 
         m_character.Play("Idle");
         std::printf("クリップ数 %zu / 再生中 %s\n",
@@ -87,6 +88,10 @@ protected:
         if (GetAsyncKeyState('1') & 0x8000) m_character.Play("Idle", 0.15f);
         if (GetAsyncKeyState('2') & 0x8000) m_character.Play("Run", 0.15f);
         if (GetAsyncKeyState('3') & 0x8000) m_character.Play("Slash", 0.15f);
+
+        // 攻撃モーションが終わったら待機に戻る。
+        if (m_character.CurrentClipName() == "Slash" && m_character.IsFinished())
+            m_character.Play("Idle", 0.2f);
     }
 
     void OnRender(float alpha) override

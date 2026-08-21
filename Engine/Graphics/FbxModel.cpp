@@ -471,14 +471,12 @@ bool FbxModel::BakeClip(FbxScene* scene, AnimationClip& clip)
             if (it == nodes.end())
             {
                 // このクリップに無いボーンは動かさない。
-                // 最終行列が単位行列になるよう、バインド姿勢そのものを入れる。
                 clip.frames[f][b] = XMMatrixInverse(nullptr, m_bones[b].bindInverse);
                 if (f == 0) missing++;
                 continue;
             }
 
             // バインド逆行列は掛けずに、グローバル変換のまま持つ。
-            // 掛けるのは BuildPose の最後 (ブレンドを正しく行うため)。
             clip.frames[f][b] = ToXMMatrix(it->second->EvaluateGlobalTransform(t));
         }
         BuildPose();   // 追加直後でも正しいポーズを返せるようにしておく
@@ -509,7 +507,7 @@ void FbxModel::AddClip(AnimationClip&& clip)
     if (m_currentClip < 0) { m_currentClip = 0; m_time = 0.0f; }
 }
 
-bool FbxModel::LoadClip(const std::string& name, const std::string& path)
+bool FbxModel::LoadClip(const std::string& name, const std::string& path, bool loop)
 {
     // スケルトンが無いと、ボーン名で対応づけられない。
     if (m_bones.empty())
@@ -541,9 +539,12 @@ bool FbxModel::LoadClip(const std::string& name, const std::string& path)
     clip.name = name;
     const bool ok = BakeClip(scene, clip);
 
-    scene->Destroy();   // メッシュは読まないので、ここで捨てて構わない
+    scene->Destroy();
 
-    if (!ok) return false;
+    if (!ok) 
+        return false;
+
+    clip.loop = loop;
 
     AddClip(std::move(clip));
     return true;
@@ -552,9 +553,11 @@ bool FbxModel::LoadClip(const std::string& name, const std::string& path)
 bool FbxModel::Play(const std::string& name, float blendSeconds)
 {
     auto it = m_clipIndexByName.find(name);
-    if (it == m_clipIndexByName.end()) return false;
+    if (it == m_clipIndexByName.end()) 
+        return false;
 
-    if (m_currentClip == it->second) return true;   // 既に再生中なら何もしない
+    if (m_currentClip == it->second) 
+        return true;
 
     // 今のクリップを「切り替え元」として取っておき、そこから移り変わる。
     if (blendSeconds > 0.0f && m_currentClip >= 0)
@@ -771,4 +774,23 @@ void FbxModel::BuildPose()
             m_pose[b] = m_bones[b].bindInverse * (*cur)[b];
         }
     }
+}
+
+bool FbxModel::SetClipLoop(const std::string& name, bool loop)
+{
+    auto it = m_clipIndexByName.find(name);
+    if (it == m_clipIndexByName.end()) return false;
+
+    m_clips[it->second].loop = loop;
+    return true;
+}
+
+bool FbxModel::IsFinished() const
+{
+    if (m_currentClip < 0) return false;
+
+    const AnimationClip& clip = m_clips[m_currentClip];
+    if (clip.loop || clip.duration <= 0.0f) return false;
+
+    return m_time >= clip.duration;
 }

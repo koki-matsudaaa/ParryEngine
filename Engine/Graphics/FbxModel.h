@@ -45,8 +45,7 @@ public:
         const std::string& defaultClipName = "Default");
 
     // 別のFBXからモーションだけを読み、クリップとして追加する。
-    // メッシュは読まない。既に読んであるスケルトンにボーン名で対応づける。
-    bool LoadClip(const std::string& name, const std::string& path);
+    bool LoadClip(const std::string& name, const std::string& path, bool loop = true);
 
     // 再生するクリップを切り替える。
     // blendSeconds > 0 なら、その秒数をかけて今のポーズから移り変わる。
@@ -56,6 +55,16 @@ public:
     const std::string& CurrentClipName() const;
 
     size_t GetClipCount() const { return m_clips.size(); }
+
+    // クリップのループ設定を変える。
+    bool SetClipLoop(const std::string& name, bool loop);
+
+    // ループしないクリップが末尾まで再生されたか。
+    // ループするクリップでは常に false。
+    bool IsFinished() const;
+
+    // 今のクリップの再生位置 (秒)。
+    float CurrentTime() const { return m_time; }
 
     // 描画コマンドを積む (IRenderable)。
     void Draw(ID3D12GraphicsCommandList* cmdList) override;
