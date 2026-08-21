@@ -471,15 +471,17 @@ bool FbxModel::BakeClip(FbxScene* scene, AnimationClip& clip)
             if (it == nodes.end())
             {
                 // このクリップに無いボーンは動かさない。
-                clip.frames[f][b] = XMMatrixIdentity();
+                // 最終行列が単位行列になるよう、バインド姿勢そのものを入れる。
+                clip.frames[f][b] = XMMatrixInverse(nullptr, m_bones[b].bindInverse);
                 if (f == 0) missing++;
                 continue;
             }
 
-            // 最終行列 = バインド逆行列 × その時刻のグローバル変換
-            const XMMATRIX global = ToXMMatrix(it->second->EvaluateGlobalTransform(t));
-            clip.frames[f][b] = m_bones[b].bindInverse * global;
+            // バインド逆行列は掛けずに、グローバル変換のまま持つ。
+            // 掛けるのは BuildPose の最後 (ブレンドを正しく行うため)。
+            clip.frames[f][b] = ToXMMatrix(it->second->EvaluateGlobalTransform(t));
         }
+        BuildPose();   // 追加直後でも正しいポーズを返せるようにしておく
     }
 
     char dbg[256];
@@ -547,15 +549,31 @@ bool FbxModel::LoadClip(const std::string& name, const std::string& path)
     return true;
 }
 
-bool FbxModel::Play(const std::string& name)
+bool FbxModel::Play(const std::string& name, float blendSeconds)
 {
     auto it = m_clipIndexByName.find(name);
     if (it == m_clipIndexByName.end()) return false;
 
     if (m_currentClip == it->second) return true;   // 既に再生中なら何もしない
 
+    // 今のクリップを「切り替え元」として取っておき、そこから移り変わる。
+    if (blendSeconds > 0.0f && m_currentClip >= 0)
+    {
+        m_prevClip = m_currentClip;
+        m_prevTime = m_time;
+        m_blendTime = 0.0f;
+        m_blendDuration = blendSeconds;
+    }
+    else
+    {
+        m_prevClip = -1;          // 即座に切り替える
+        m_blendDuration = 0.0f;
+    }
+
     m_currentClip = it->second;
     m_time = 0.0f;
+
+    BuildPose();
     return true;
 }
 
@@ -624,48 +642,133 @@ void FbxModel::Draw(ID3D12GraphicsCommandList* cmdList)
         static_cast<UINT>(m_indices.size()), 1, 0, 0, 0);
 }
 
-// アニメの時刻を進める。末尾まで来たら先頭へループ。
 void FbxModel::UpdateAnimation(float dt)
 {
-    if (m_currentClip < 0) return;
-
-    const AnimationClip& clip = m_clips[m_currentClip];
-    if (clip.duration <= 0.0f) return;
-
-    m_time += dt;
-
-    if (clip.loop)
+    // 再生中のクリップを進める。
+    if (m_currentClip >= 0)
     {
-        while (m_time >= clip.duration) m_time -= clip.duration;
+        const AnimationClip& clip = m_clips[m_currentClip];
+        if (clip.duration > 0.0f)
+        {
+            m_time += dt;
+            if (clip.loop)
+            {
+                while (m_time >= clip.duration) m_time -= clip.duration;
+            }
+            else if (m_time > clip.duration)
+            {
+                m_time = clip.duration;   // ループしないクリップは末尾で止める
+            }
+        }
     }
-    else if (m_time > clip.duration)
+
+    // ブレンド中は、切り替え元も動かし続ける。
+    // 止めると、移り変わりの途中で元のポーズが固まって見える。
+    if (m_prevClip >= 0)
     {
-        m_time = clip.duration;   // ループしないクリップは末尾で止める
+        const AnimationClip& prev = m_clips[m_prevClip];
+        if (prev.duration > 0.0f)
+        {
+            m_prevTime += dt;
+            if (prev.loop)
+            {
+                while (m_prevTime >= prev.duration) m_prevTime -= prev.duration;
+            }
+            else if (m_prevTime > prev.duration)
+            {
+                m_prevTime = prev.duration;
+            }
+        }
+
+        m_blendTime += dt;
+        if (m_blendTime >= m_blendDuration)
+        {
+            m_prevClip = -1;          // 移り変わり完了
+            m_blendDuration = 0.0f;
+        }
     }
+
+    BuildPose();
 }
 
-// 今の時刻に対応するフレームのボーン行列を返す。
+// 組み立て済みのポーズを返すだけ。中身は BuildPose が作る。
 const std::vector<XMMATRIX>& FbxModel::GetCurrentBoneMatrices() const
 {
-    static std::vector<XMMATRIX> identityFallback;
+    return m_pose;
+}
 
-    // クリップが1本も無ければ変形なし (バインドポーズのまま)。
-    if (m_currentClip < 0 || m_clips[m_currentClip].frames.empty())
-    {
-        if (identityFallback.size() != m_bones.size())
-            identityFallback.assign(m_bones.size(), XMMatrixIdentity());
-        return identityFallback;
-    }
+const std::vector<XMMATRIX>* FbxModel::SampleClip(int clipIndex, float time) const
+{
+    if (clipIndex < 0 || clipIndex >= static_cast<int>(m_clips.size())) return nullptr;
 
-    const AnimationClip& clip = m_clips[m_currentClip];
+    const AnimationClip& clip = m_clips[clipIndex];
+    if (clip.frames.empty()) return nullptr;
 
     // 時刻 → フレーム番号 (一番近いフレームを選ぶ簡易版)。
     int frame = (m_fixedFrame >= 0)
         ? m_fixedFrame
-        : static_cast<int>(m_time * clip.fps);
+        : static_cast<int>(time * clip.fps);
 
     if (frame < 0) frame = 0;
     if (frame >= clip.FrameCount()) frame = clip.FrameCount() - 1;
 
-    return clip.frames[frame];
+    const std::vector<XMMATRIX>& f = clip.frames[frame];
+    return (f.size() == m_bones.size()) ? &f : nullptr;
+}
+
+void FbxModel::BuildPose()
+{
+    const size_t boneCount = m_bones.size();
+    if (boneCount == 0) { m_pose.clear(); return; }
+
+    if (m_pose.size() != boneCount)
+        m_pose.assign(boneCount, XMMatrixIdentity());
+
+    const std::vector<XMMATRIX>* cur = SampleClip(m_currentClip, m_time);
+
+    // クリップが1本も無ければ変形なし (バインドポーズのまま)。
+    if (!cur)
+    {
+        for (auto& m : m_pose) m = XMMatrixIdentity();
+        return;
+    }
+
+    const std::vector<XMMATRIX>* prev =
+        (m_blendDuration > 0.0f) ? SampleClip(m_prevClip, m_prevTime) : nullptr;
+
+    // ブレンドしていないときは、バインド逆行列を掛けるだけ。
+    if (!prev)
+    {
+        for (size_t b = 0; b < boneCount; b++)
+            m_pose[b] = m_bones[b].bindInverse * (*cur)[b];
+        return;
+    }
+
+    float t = m_blendTime / m_blendDuration;   // 0 = 切り替え元, 1 = 切り替え先
+    if (t < 0.0f) t = 0.0f;
+    if (t > 1.0f) t = 1.0f;
+
+    for (size_t b = 0; b < boneCount; b++)
+    {
+        // 行列をそのまま混ぜると回転が縮んでモデルが潰れる。
+        // 拡大・回転・平行移動に分解し、回転だけ球面補間で混ぜる。
+        XMVECTOR sA, rA, pA, sB, rB, pB;
+        if (XMMatrixDecompose(&sA, &rA, &pA, (*prev)[b]) &&
+            XMMatrixDecompose(&sB, &rB, &pB, (*cur)[b]))
+        {
+            const XMVECTOR s = XMVectorLerp(sA, sB, t);
+            const XMVECTOR r = XMQuaternionSlerp(rA, rB, t);
+            const XMVECTOR p = XMVectorLerp(pA, pB, t);
+
+            const XMMATRIX g = XMMatrixAffineTransformation(
+                s, XMVectorZero(), r, p);
+
+            m_pose[b] = m_bones[b].bindInverse * g;
+        }
+        else
+        {
+            // 分解できない (潰れた行列など) 場合は切り替え先をそのまま使う。
+            m_pose[b] = m_bones[b].bindInverse * (*cur)[b];
+        }
+    }
 }

@@ -83,10 +83,10 @@ protected:
         if (GetAsyncKeyState(VK_UP) & 0x8000) m_camera.AddPitch(-rotSpeed * dt);
         if (GetAsyncKeyState(VK_DOWN) & 0x8000) m_camera.AddPitch(+rotSpeed * dt);
 
-        // 数字キーでモーションを切り替える。
-        if (GetAsyncKeyState('1') & 0x8000) m_character.Play("Idle");
-        if (GetAsyncKeyState('2') & 0x8000) m_character.Play("Run");
-        if (GetAsyncKeyState('3') & 0x8000) m_character.Play("Slash");
+        // 数字キーでモーションを切り替える。0.15秒かけて移り変わる。
+        if (GetAsyncKeyState('1') & 0x8000) m_character.Play("Idle", 0.15f);
+        if (GetAsyncKeyState('2') & 0x8000) m_character.Play("Run", 0.15f);
+        if (GetAsyncKeyState('3') & 0x8000) m_character.Play("Slash", 0.15f);
     }
 
     void OnRender(float alpha) override

@@ -48,8 +48,9 @@ public:
     // メッシュは読まない。既に読んであるスケルトンにボーン名で対応づける。
     bool LoadClip(const std::string& name, const std::string& path);
 
-    // 再生するクリップを切り替える。先頭から再生し直す。
-    bool Play(const std::string& name);
+    // 再生するクリップを切り替える。
+    // blendSeconds > 0 なら、その秒数をかけて今のポーズから移り変わる。
+    bool Play(const std::string& name, float blendSeconds = 0.0f);
 
     // 今再生しているクリップ名 (無ければ空)。
     const std::string& CurrentClipName() const;
@@ -131,6 +132,12 @@ private:
     // クリップを登録する。同名があれば差し替える。
     void AddClip(AnimationClip&& clip);
 
+    // 今のポーズを組み立てる。ブレンド中なら2本を混ぜる。
+    void BuildPose();
+
+    // クリップの指定時刻のフレームを返す。範囲外なら nullptr。
+    const std::vector<XMMATRIX>* SampleClip(int clipIndex, float time) const;
+
     std::string m_path;   // 読み込み元のパス。ログでどのモデルか分かるように
 
     std::vector<FbxVtx>        m_vertices; // 全メッシュ分をまとめて持つ
@@ -144,6 +151,15 @@ private:
     int   m_currentClip = -1;                     // 今再生中 (-1 = 無し)
     float m_time = 0.0f;                          // 現在の再生時刻 (秒)
     int   m_fixedFrame = -1;                      // デバッグ用のフレーム固定
+
+    // ── クロスフェード ──
+    int   m_prevClip = -1;        // 切り替え元 (-1 = ブレンドしていない)
+    float m_prevTime = 0.0f;      // 切り替え元の再生時刻
+    float m_blendTime = 0.0f;     // ブレンド開始からの経過秒
+    float m_blendDuration = 0.0f; // ブレンドにかける秒数
+
+    // 合成後の最終行列。GetCurrentBoneMatrices が返すのはこれ。
+    std::vector<XMMATRIX> m_pose;
 
     // GPUリソース
     ID3D12Resource* m_vertBuff = nullptr;
