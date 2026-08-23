@@ -36,7 +36,6 @@
     <Import Project="..\Build\Dependencies.props" />
   </ImportGroup>
   <PropertyGroup>
-    <!-- Assets\ を相対パスで開けるよう、実行時のカレントをルートに合わせる -->
     <LocalDebuggerWorkingDirectory>$(ParryRootDir)</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
@@ -47,7 +46,6 @@
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
-      <!-- M0 は動作確認のためコンソール。M1 でウィンドウ (Windows) に変える。 -->
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
@@ -70,7 +68,6 @@
   <ItemGroup>
     <ClCompile Include="Main.cpp" />
   </ItemGroup>
-  <!-- Game は Engine に依存する。逆向きの参照は存在しない。 -->
   <ItemGroup>
     <ProjectReference Include="..\Engine\Engine.vcxproj">
       <Project>{a1b2c3d4-0001-4000-8000-000000000001}</Project>

@@ -15,8 +15,8 @@ class GameApp : public Engine::Application
     static constexpr float kCharacterScale = 0.01f;  // 180  → 1.8m
     static constexpr float kTerrainScale = 20.0f;  //   2  → 40m 四方
 
-    FbxModel m_terrain;
-    FbxModel m_character;
+    Engine::FbxModel m_terrain;
+    Engine::FbxModel m_character;
     Engine::Camera m_camera;
 
 protected:

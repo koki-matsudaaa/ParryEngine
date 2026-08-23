@@ -51,14 +51,9 @@
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
-  <!-- ====================================================================
-       移植が済んだファイルだけをここに並べる。
-       旧プロジェクトから持ってきただけでまだ手を入れていないファイルは
-       ディスク上にはあるが、ここには載せない (= まだビルドされない)。
-       進捗は MIGRATION.md を参照。
-       ==================================================================== -->
   <ItemGroup>
     <ClInclude Include="Animation\AnimationClip.h" />
+    <ClInclude Include="Animation\Animator.h" />
     <ClInclude Include="Core\Application.h" />
     <ClInclude Include="Core\Dx12Context.h" />
     <ClInclude Include="Core\FixedTimestep.h" />
@@ -76,6 +71,7 @@
     <ClCompile Include="..\lib\imgui\imgui_impl_win32.cpp" />
     <ClCompile Include="..\lib\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\lib\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Animation\Animator.cpp" />
     <ClCompile Include="Core\Application.cpp" />
     <ClCompile Include="Core\Dx12Context.cpp" />
     <ClCompile Include="Core\FixedTimestep.cpp" />
