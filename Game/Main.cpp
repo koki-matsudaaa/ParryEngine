@@ -1,10 +1,12 @@
 ﻿#include "Engine/Core/Application.h"
 #include "Engine/Graphics/FbxModel.h"
 #include "Engine/Graphics/Camera.h"
+#include "Engine/Combat/ActionStateMachine.h"
 
 #include <cstdio>
 
 using namespace DirectX;
+using Engine::ActionPhase;
 
 class GameApp : public Engine::Application
 {
@@ -18,6 +20,9 @@ class GameApp : public Engine::Application
     Engine::FbxModel m_terrain;
     Engine::FbxModel m_character;
     Engine::Camera m_camera;
+    Engine::ActionStateMachine m_actions;
+
+    bool m_prevAttack = false;  // 押した瞬間を拾うための前フレーム状態
 
 protected:
     bool OnStart() override
@@ -70,6 +75,20 @@ protected:
         std::printf("キャラ範囲 X[%.1f .. %.1f]  Y[%.1f .. %.1f]  Z[%.1f .. %.1f]\n",
             cmn.x, cmx.x, cmn.y, cmx.y, cmn.z, cmx.z);
 
+        // ── アクションの定義 ──
+        m_actions.SetAnimator(&m_character.GetAnimator());
+        {
+            Engine::ActionData slash;
+            slash.name = "Slash";
+            slash.clipName = "Slash";
+            slash.startup = 12;   // 発生まで 12F
+            slash.active = 6;    // 判定 6F
+            slash.recovery = 24;   // 硬直 24F
+            slash.cancelFrom = 30;   // 30F 目からキャンセル可
+            m_actions.AddAction(slash);
+        }
+        std::printf("Z キーで攻撃\n");
+
         return true;
     }
 
@@ -92,6 +111,41 @@ protected:
         // 攻撃モーションが終わったら待機に戻る。
         if (m_character.CurrentClipName() == "Slash" && m_character.IsFinished())
             m_character.Play("Idle", 0.2f);
+
+        // ── 攻撃 ──
+        // 押した瞬間だけ拾う。
+        const bool attackHeld = (GetAsyncKeyState('Z') & 0x8000) != 0;
+        const bool attackPressed = attackHeld && !m_prevAttack;
+        m_prevAttack = attackHeld;
+
+        if (attackPressed && m_actions.CanCancel())
+            m_actions.StartAction("Slash");
+
+        // アクションを1フレーム進める。dt を渡さないのが要点。
+        const ActionPhase prevPhase = m_actions.Phase();
+        m_actions.Step();
+
+        // 段階が変わったときだけ表示する。
+        {
+            const ActionPhase now = m_actions.Phase();
+            if (now != prevPhase)
+            {
+                const char* names[] = { "----", "発生", "判定", "硬直" };
+                std::printf("[%3d F] %s\n",
+                    m_actions.ElapsedFrames(), names[(int)now]);
+            }
+        }
+
+        // 何もしていないなら待機へ戻す。
+        if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
+            m_character.Play("Idle", 0.2f);
+
+        // 移動モーションの確認用 (アクション中は受け付けない)。
+        if (m_actions.IsIdle())
+        {
+            if (GetAsyncKeyState('1') & 0x8000) m_character.Play("Idle", 0.15f);
+            if (GetAsyncKeyState('2') & 0x8000) m_character.Play("Run", 0.15f);
+        }
     }
 
     void OnRender(float alpha) override
