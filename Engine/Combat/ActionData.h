@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <string>
+#include <vector>
 
 namespace Engine
 {
@@ -23,6 +24,9 @@ namespace Engine
 
         // キャンセルを受け付け始めるフレーム。-1 ならキャンセル不可。
         int cancelFrom = -1;
+
+        // キャンセルで移れるアクション名
+        std::vector<std::string> cancelTo;
 
         int TotalFrames() const { return startup + active + recovery; }
     };

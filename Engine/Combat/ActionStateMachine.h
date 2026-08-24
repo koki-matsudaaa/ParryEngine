@@ -38,6 +38,9 @@ namespace Engine
         // 今このアクションを中断して別の行動に移れるか。
         bool CanCancel() const;
 
+        // 今このアクションを中断して、指定の行動へ移れるか。
+        bool CanCancelInto(const std::string& next) const;
+
         // 登録されているアクションを名前で引く。
         const ActionData* Find(const std::string& name) const;
 

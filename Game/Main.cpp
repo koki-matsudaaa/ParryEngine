@@ -2,6 +2,7 @@
 #include "Engine/Graphics/FbxModel.h"
 #include "Engine/Graphics/Camera.h"
 #include "Engine/Combat/ActionStateMachine.h"
+#include "Engine/Input/InputBuffer.h"
 
 #include <cstdio>
 
@@ -21,6 +22,7 @@ class GameApp : public Engine::Application
     Engine::FbxModel m_character;
     Engine::Camera m_camera;
     Engine::ActionStateMachine m_actions;
+    Engine::InputBuffer m_input;
 
     bool m_prevAttack = false;  // 押した瞬間を拾うための前フレーム状態
 
@@ -85,7 +87,9 @@ protected:
             slash.active = 6;    // 判定 6F
             slash.recovery = 24;   // 硬直 24F
             slash.cancelFrom = 30;   // 30F 目からキャンセル可
+            slash.cancelTo = { "Slash" };   // 斬りから斬りへは繋げる
             m_actions.AddAction(slash);
+            m_input.SetWindow(20);
         }
         std::printf("Z キーで攻撃\n");
 
@@ -113,17 +117,25 @@ protected:
             m_character.Play("Idle", 0.2f);
 
         // ── 攻撃 ──
-        // 押した瞬間だけ拾う。
         const bool attackHeld = (GetAsyncKeyState('Z') & 0x8000) != 0;
-        const bool attackPressed = attackHeld && !m_prevAttack;
+        if (attackHeld && !m_prevAttack) m_input.Push("Attack");
         m_prevAttack = attackHeld;
 
-        if (attackPressed && m_actions.CanCancel())
+        // 受け付けられる状態なら、溜まっている入力を消費して発動する。
+        // 硬直中に押した入力も、ここで拾われる。
+        if (m_input.Has("Attack") && m_actions.CanCancelInto("Slash"))
+        {
+            const int age = m_input.AgeOf("Attack");
+            m_input.Consume("Attack");
             m_actions.StartAction("Slash");
 
-        // アクションを1フレーム進める。dt を渡さないのが要点。
+            if (age > 0) std::printf("  (%dF 前の入力で発動)\n", age);
+        }
+
+        // アクションを1フレーム進める。
         const ActionPhase prevPhase = m_actions.Phase();
         m_actions.Step();
+        m_input.Step();
 
         // 段階が変わったときだけ表示する。
         {
@@ -134,17 +146,6 @@ protected:
                 std::printf("[%3d F] %s\n",
                     m_actions.ElapsedFrames(), names[(int)now]);
             }
-        }
-
-        // 何もしていないなら待機へ戻す。
-        if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
-            m_character.Play("Idle", 0.2f);
-
-        // 移動モーションの確認用 (アクション中は受け付けない)。
-        if (m_actions.IsIdle())
-        {
-            if (GetAsyncKeyState('1') & 0x8000) m_character.Play("Idle", 0.15f);
-            if (GetAsyncKeyState('2') & 0x8000) m_character.Play("Run", 0.15f);
         }
     }
 

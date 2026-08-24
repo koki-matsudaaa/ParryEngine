@@ -1,5 +1,7 @@
 ﻿#include "Engine/Combat/ActionStateMachine.h"
 
+#include <algorithm>
+
 namespace Engine
 {
     void ActionStateMachine::AddAction(const ActionData& action)
@@ -80,5 +82,21 @@ namespace Engine
 
         const ActionData& a = m_actions[m_current];
         return (a.cancelFrom >= 0 && m_frame >= a.cancelFrom);
+    }
+
+    bool ActionStateMachine::CanCancelInto(const std::string& next) const
+    {
+        if (m_current < 0) return true;   // 何もしていないなら自由
+
+        const ActionData& a = m_actions[m_current];
+
+        // キャンセル可能区間に入っているか。
+        if (a.cancelFrom < 0 || m_frame < a.cancelFrom) return false;
+
+        // 移り先の制限。空なら何にでも移れる。
+        if (a.cancelTo.empty()) return true;
+
+        return std::find(a.cancelTo.begin(), a.cancelTo.end(), next)
+            != a.cancelTo.end();
     }
 }
