@@ -54,6 +54,8 @@
   <ItemGroup>
     <ClInclude Include="Animation\AnimationClip.h" />
     <ClInclude Include="Animation\Animator.h" />
+    <ClInclude Include="Combat\ActionData.h" />
+    <ClInclude Include="Combat\ActionStateMachine.h" />
     <ClInclude Include="Core\Application.h" />
     <ClInclude Include="Core\Dx12Context.h" />
     <ClInclude Include="Core\FixedTimestep.h" />
@@ -63,6 +65,8 @@
     <ClInclude Include="Graphics\IRenderable.h" />
     <ClInclude Include="Graphics\PipelineCache.h" />
     <ClInclude Include="Graphics\Renderer.h" />
+    <ClInclude Include="Input\InputBuffer.h" />
+    <ClInclude Include="Tools\ImguiLayer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\lib\imgui\imgui.cpp" />
@@ -72,6 +76,7 @@
     <ClCompile Include="..\lib\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\lib\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Animation\Animator.cpp" />
+    <ClCompile Include="Combat\ActionStateMachine.cpp" />
     <ClCompile Include="Core\Application.cpp" />
     <ClCompile Include="Core\Dx12Context.cpp" />
     <ClCompile Include="Core\FixedTimestep.cpp" />
@@ -81,6 +86,8 @@
     <ClCompile Include="Graphics\IRenderable.cpp" />
     <ClCompile Include="Graphics\PipelineCache.cpp" />
     <ClCompile Include="Graphics\Renderer.cpp" />
+    <ClCompile Include="Input\InputBuffer.cpp" />
+    <ClCompile Include="Tools\ImguiLayer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

@@ -1,50 +1,59 @@
 ﻿#include "Engine/Core/Application.h"
 #include "Engine/Graphics/FbxModel.h"
 #include "Engine/Graphics/Camera.h"
+#include "Engine/Combat/ActionStateMachine.h"
+#include "Engine/Input/InputBuffer.h"
+#include "imgui.h"
 
 #include <cstdio>
 
 using namespace DirectX;
+using Engine::ActionPhase;
 
 class GameApp : public Engine::Application
 {
-    // ── 単位の決め事 ──────────────────────────
-    // このプロジェクトは 1 unit = 1 メートル とする。
-    // 重力 9.8、歩行 4m/s、パリィ判定の半径 0.5m のように、
-    // 現実の数字をそのまま調整値として使えるようにするため。
+    // 1 unit = 1 m
     static constexpr float kCharacterScale = 0.01f;  // 180  → 1.8m
     static constexpr float kTerrainScale = 20.0f;  //   2  → 40m 四方
 
     Engine::FbxModel m_terrain;
     Engine::FbxModel m_character;
     Engine::Camera m_camera;
+    Engine::ActionStateMachine m_actions;
+    Engine::InputBuffer m_input;
+
+    bool m_prevAttack = false;  // 押した瞬間を拾うための前フレーム状態
 
 protected:
     bool OnStart() override
     {
         SetClearColor(0.10f, 0.16f, 0.24f);
 
-        if (!m_terrain.Load("Assets/Model/SnowTerrain.fbx", "Assets/Model/grass_texture_01.png"))
+        if (!LoadTerrain())   return false;
+        if (!LoadCharacter()) return false;
+        SetupCamera();
+        SetupActions();
+
+        std::printf("Z = 攻撃   矢印キー = カメラ\n");
+        return true;
+    }
+
+private:
+    bool LoadTerrain()
+    {
+        if (!m_terrain.Load("Assets/Model/SnowTerrain.fbx",
+            "Assets/Model/grass_texture_01.png"))
         {
-            std::printf("FBX の読み込みに失敗しました\n");
+            std::printf("地形の読み込みに失敗しました\n");
             return false;
         }
+        m_terrain.SetStaticPipeline(true);   // ボーンが無いので Static で描く
+        return true;
+    }
 
-        m_camera.SetTarget(XMFLOAT3(0.0f, 0.0f, 0.0f));
-        m_camera.SetDistance(4.0f);
-        std::printf("矢印キーでカメラを回せます\n");
-
-        // ボーンを持たないメッシュなので Static パイプラインで描く。
-        m_terrain.SetStaticPipeline(true);
-
-        // カメラの距離を決めるため、モデルの大きさを出しておく。
-        const XMFLOAT3 mn = m_terrain.GetMin();
-        const XMFLOAT3 mx = m_terrain.GetMax();
-        std::printf("頂点数 %zu\n", m_terrain.GetVertices().size());
-        std::printf("範囲 X[%.1f .. %.1f]  Y[%.1f .. %.1f]  Z[%.1f .. %.1f]\n",
-            mn.x, mx.x, mn.y, mx.y, mn.z, mx.z);
-
-        // メッシュとスケルトンは1回だけ読む。この FBX のアニメは "Idle" になる。
+    bool LoadCharacter()
+    {
+        // メッシュとスケルトンは1回だけ。この FBX のアニメが "Idle" になる。
         if (!m_character.Load("Assets/Model/Bot_Idle.fbx", "", "Idle"))
         {
             std::printf("キャラクターの読み込みに失敗しました\n");
@@ -52,27 +61,39 @@ protected:
         }
 
         // モーションだけを追加で読む。メッシュは重複しない。
-        if (!m_character.LoadClip("Run", "Assets/Model/Bot_Run.fbx"))
-            std::printf("Run の読み込みに失敗\n");
-
-        if (!m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false))
-            std::printf("Slash の読み込みに失敗\n");
+        m_character.LoadClip("Run", "Assets/Model/Bot_Run.fbx");
+        m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false);
 
         m_character.Play("Idle");
-        std::printf("クリップ数 %zu / 再生中 %s\n",
-            m_character.GetClipCount(), m_character.CurrentClipName().c_str());
-        std::printf("1=Idle  2=Run  3=Slash で切り替え\n");
-
-        const XMFLOAT3 cmn = m_character.GetMin();
-        const XMFLOAT3 cmx = m_character.GetMax();
-        std::printf("キャラ ボーン数 %zu / フレーム数 %d\n",
-            m_character.GetBoneCount(), m_character.GetFrameCount());
-        std::printf("キャラ範囲 X[%.1f .. %.1f]  Y[%.1f .. %.1f]  Z[%.1f .. %.1f]\n",
-            cmn.x, cmx.x, cmn.y, cmx.y, cmn.z, cmx.z);
-
+        std::printf("クリップ %zu 本 / ボーン %zu 本\n",
+            m_character.GetClipCount(), m_character.GetBoneCount());
         return true;
     }
 
+    void SetupCamera()
+    {
+        m_camera.SetTarget(XMFLOAT3(0.0f, 0.0f, 0.0f));
+        m_camera.SetDistance(4.0f);
+    }
+
+    void SetupActions()
+    {
+        m_actions.SetAnimator(&m_character.GetAnimator());
+
+        Engine::ActionData slash;
+        slash.name = "Slash";
+        slash.clipName = "Slash";
+        slash.startup = 30;
+        slash.active = 25;
+        slash.recovery = 30;
+        slash.cancelFrom = 30;
+        slash.cancelTo = { "Slash" };
+        m_actions.AddAction(slash);
+
+        m_input.SetWindow(20);
+    }
+
+protected:
     void OnUpdate(float dt) override
     {
         m_character.UpdateAnimation(dt);
@@ -84,14 +105,40 @@ protected:
         if (GetAsyncKeyState(VK_UP) & 0x8000) m_camera.AddPitch(-rotSpeed * dt);
         if (GetAsyncKeyState(VK_DOWN) & 0x8000) m_camera.AddPitch(+rotSpeed * dt);
 
-        // 数字キーでモーションを切り替える。0.15秒かけて移り変わる。
-        if (GetAsyncKeyState('1') & 0x8000) m_character.Play("Idle", 0.15f);
-        if (GetAsyncKeyState('2') & 0x8000) m_character.Play("Run", 0.15f);
-        if (GetAsyncKeyState('3') & 0x8000) m_character.Play("Slash", 0.15f);
-
-        // 攻撃モーションが終わったら待機に戻る。
-        if (m_character.CurrentClipName() == "Slash" && m_character.IsFinished())
+        // アクション（硬直）が終わったら待機へ戻す
+        if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
             m_character.Play("Idle", 0.2f);
+
+        // ── 攻撃 ──
+        const bool attackHeld = (GetAsyncKeyState('Z') & 0x8000) != 0;
+        if (attackHeld && !m_prevAttack) m_input.Push("Attack");
+        m_prevAttack = attackHeld;
+
+        // 受け付けられる状態なら、溜まっている入力を消費して発動する。
+        // 硬直中に押した入力も、ここで拾われる。
+        if (m_input.Has("Attack") && m_actions.CanCancelInto("Slash"))
+        {
+            const int age = m_input.AgeOf("Attack");
+            m_input.Consume("Attack");
+            m_actions.StartAction("Slash");
+
+            if (age > 0) std::printf("  (%dF 前の入力で発動)\n", age);
+        }
+
+        // アクションを1フレーム進める。
+        const ActionPhase prevPhase = m_actions.Phase();
+        m_actions.Step();
+        m_input.Step();
+
+        // 段階が変わったときだけ表示する。
+        {
+            const ActionPhase now = m_actions.Phase();
+            if (now != prevPhase)
+            {
+                std::printf("[%3d F] %s\n",
+                    m_actions.ElapsedFrames(), Engine::ToString(now));
+            }
+        }
     }
 
     void OnRender(float alpha) override
@@ -104,6 +151,44 @@ protected:
             XMMatrixScaling(kTerrainScale, kTerrainScale, kTerrainScale));
         GetRenderer().DrawModel(&m_character,
             XMMatrixScaling(kCharacterScale, kCharacterScale, kCharacterScale));
+    }
+
+    void OnGui() override
+    {
+        ImGui::Begin("アクション調整");
+
+        ImGui::Text("Z キーで攻撃");
+        ImGui::Separator();
+
+        // 単位はすべてフレーム (1/60秒)。ここを動かすと即座に効く。
+        for (auto& a : m_actions.Actions())
+        {
+            ImGui::PushID(a.name.c_str());
+            ImGui::Text("[ %s ]", a.name.c_str());
+
+            ImGui::SliderInt("発生", &a.startup, 0, 60);
+            ImGui::SliderInt("判定", &a.active, 1, 60);
+            ImGui::SliderInt("硬直", &a.recovery, 0, 90);
+            ImGui::SliderInt("キャンセル", &a.cancelFrom, -1, 90);
+
+            ImGui::Text("合計 %d F (%.2f 秒)",
+                a.TotalFrames(), a.TotalFrames() / 60.0f);
+            ImGui::Separator();
+            ImGui::PopID();
+        }
+
+        // 先行入力の受付幅。手触りが一番変わる数字。
+        int window = m_input.Window();
+        if (ImGui::SliderInt("先行入力の受付", &window, 0, 30))
+            m_input.SetWindow(window);
+
+        ImGui::Separator();
+
+        // 今の進行状況。
+        ImGui::Text("いま : %s   %d F",
+            Engine::ToString(m_actions.Phase()), m_actions.ElapsedFrames());
+
+        ImGui::End();
     }
 
     void OnShutdown() override

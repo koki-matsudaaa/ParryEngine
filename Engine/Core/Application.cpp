@@ -19,9 +19,27 @@ namespace Engine
         // 表示
         ShowWindow(m_hwnd, SW_SHOW);
 
+        // 初期化と逆の順
+        auto cleanup = [this]()
+        {
+            m_imgui.Shutdown();
+            m_renderer.Shutdown();
+            UnregisterClass(m_windowClass.lpszClassName, m_windowClass.hInstance);
+            CoUninitialize();
+        };
+
         if (!m_renderer.Initialize(m_hwnd))
         {
             OutputDebugStringA("Renderer::Initialize failed\n");
+            UnregisterClass(m_windowClass.lpszClassName, m_windowClass.hInstance);
+            CoUninitialize();
+            return -1;
+        }
+
+        if (!m_imgui.Initialize(m_hwnd))
+        {
+            OutputDebugStringA("ImGuiLayer::Initialize failed\n");
+            m_renderer.Shutdown();
             UnregisterClass(m_windowClass.lpszClassName, m_windowClass.hInstance);
             CoUninitialize();
             return -1;
@@ -61,14 +79,17 @@ namespace Engine
 
             m_renderer.BeginFrame(m_clearColor);
             OnRender(m_clock.Alpha());
+
+            // 重ねて描くので、OnRenderの後
+            m_imgui.NewFrame();
+            OnGui();
+            m_imgui.Render(m_renderer.CommandList());
+
             m_renderer.EndFrame();
         }
 
         OnShutdown();
-        m_renderer.Shutdown();
-
-        UnregisterClass(m_windowClass.lpszClassName, m_windowClass.hInstance);
-        CoUninitialize();
+        cleanup();
         return 0;
     }
 }

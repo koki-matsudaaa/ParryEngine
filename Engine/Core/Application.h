@@ -2,6 +2,7 @@
 #include <Windows.h>
 #include "Engine/Core/FixedTimestep.h"
 #include "Engine/Graphics/Renderer.h"
+#include "Engine/Tools/ImGuiLayer.h"
 
 namespace Engine
 {
@@ -18,23 +19,22 @@ namespace Engine
         int Run();
 
     protected:
-        // 起動時に1回。DX12 の準備が済んだ後に呼ばれる。
-        // false を返すと起動を中止する。
+        // DX12の起動後
         virtual bool OnStart() { return true; }
 
-        // 固定ステップごとに呼ばれる。dt は常に同じ値 (既定 1/60秒)。
-        // 1フレームに0回のことも、複数回のこともある。
+        // 固定ステップごと
         virtual void OnUpdate(float dt) { (void)dt; }
 
-        // 描画。1フレームに1回だけ呼ばれる。
-        // 画面はすでに塗られた状態で来るので、この中で描画コマンドを積む。
-        // alpha は直前のステップと現在のステップの間の位置 (0..1)。
+        // 描画。1フレームごと
         virtual void OnRender(float alpha) { (void)alpha; }
+
+        // 調整用の ImGui ウィンドウを出す。毎フレーム呼ばれる。
+        virtual void OnGui() {}
 
         // 終了時に1回。DX12 を片付ける前に呼ばれる。
         virtual void OnShutdown() {}
 
-        // ── ゲーム側から使える機能 ──────────────────────
+        // ── ゲーム側から使える機能 ──
 
         HWND Window() const { return m_hwnd; }
         const FixedTimestep& Clock() const { return m_clock; }
@@ -55,6 +55,7 @@ namespace Engine
         WNDCLASSEX    m_windowClass = {};
         FixedTimestep m_clock;
         Renderer      m_renderer;
+        ImGuiLayer m_imgui;
 
         float m_clearColor[4] = { 0.05f, 0.06f, 0.12f, 1.0f };
     };
