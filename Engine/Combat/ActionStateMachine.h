@@ -44,6 +44,9 @@ namespace Engine
         // 登録されているアクションを名前で引く。
         const ActionData* Find(const std::string& name) const;
 
+        // 登録されているアクション一覧
+        std::vector<ActionData>& Actions() { return m_actions; }
+
     private:
         Animator* m_animator = nullptr;
 

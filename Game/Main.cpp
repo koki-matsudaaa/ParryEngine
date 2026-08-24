@@ -3,6 +3,7 @@
 #include "Engine/Graphics/Camera.h"
 #include "Engine/Combat/ActionStateMachine.h"
 #include "Engine/Input/InputBuffer.h"
+#include "imgui.h"
 
 #include <cstdio>
 
@@ -83,9 +84,9 @@ protected:
             Engine::ActionData slash;
             slash.name = "Slash";
             slash.clipName = "Slash";
-            slash.startup = 12;   // 発生まで 12F
-            slash.active = 6;    // 判定 6F
-            slash.recovery = 24;   // 硬直 24F
+            slash.startup = 30;   // 発生まで 12F
+            slash.active = 25;    // 判定 6F
+            slash.recovery = 30;   // 硬直 24F
             slash.cancelFrom = 30;   // 30F 目からキャンセル可
             slash.cancelTo = { "Slash" };   // 斬りから斬りへは繋げる
             m_actions.AddAction(slash);
@@ -107,13 +108,8 @@ protected:
         if (GetAsyncKeyState(VK_UP) & 0x8000) m_camera.AddPitch(-rotSpeed * dt);
         if (GetAsyncKeyState(VK_DOWN) & 0x8000) m_camera.AddPitch(+rotSpeed * dt);
 
-        // 数字キーでモーションを切り替える。0.15秒かけて移り変わる。
-        if (GetAsyncKeyState('1') & 0x8000) m_character.Play("Idle", 0.15f);
-        if (GetAsyncKeyState('2') & 0x8000) m_character.Play("Run", 0.15f);
-        if (GetAsyncKeyState('3') & 0x8000) m_character.Play("Slash", 0.15f);
-
-        // 攻撃モーションが終わったら待機に戻る。
-        if (m_character.CurrentClipName() == "Slash" && m_character.IsFinished())
+        // アクション（硬直）が終わったら待機へ戻す
+        if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
             m_character.Play("Idle", 0.2f);
 
         // ── 攻撃 ──
@@ -159,6 +155,45 @@ protected:
             XMMatrixScaling(kTerrainScale, kTerrainScale, kTerrainScale));
         GetRenderer().DrawModel(&m_character,
             XMMatrixScaling(kCharacterScale, kCharacterScale, kCharacterScale));
+    }
+
+    void OnGui() override
+    {
+        ImGui::Begin("アクション調整");
+
+        ImGui::Text("Z キーで攻撃");
+        ImGui::Separator();
+
+        // 単位はすべてフレーム (1/60秒)。ここを動かすと即座に効く。
+        for (auto& a : m_actions.Actions())
+        {
+            ImGui::PushID(a.name.c_str());
+            ImGui::Text("[ %s ]", a.name.c_str());
+
+            ImGui::SliderInt("発生", &a.startup, 0, 60);
+            ImGui::SliderInt("判定", &a.active, 1, 60);
+            ImGui::SliderInt("硬直", &a.recovery, 0, 90);
+            ImGui::SliderInt("キャンセル", &a.cancelFrom, -1, 90);
+
+            ImGui::Text("合計 %d F (%.2f 秒)",
+                a.TotalFrames(), a.TotalFrames() / 60.0f);
+            ImGui::Separator();
+            ImGui::PopID();
+        }
+
+        // 先行入力の受付幅。手触りが一番変わる数字。
+        int window = m_input.Window();
+        if (ImGui::SliderInt("先行入力の受付", &window, 0, 30))
+            m_input.SetWindow(window);
+
+        ImGui::Separator();
+
+        // 今の進行状況。
+        const char* names[] = { "----", "発生", "判定", "硬直" };
+        ImGui::Text("いま : %s   %d F",
+            names[(int)m_actions.Phase()], m_actions.ElapsedFrames());
+
+        ImGui::End();
     }
 
     void OnShutdown() override
