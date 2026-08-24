@@ -19,6 +19,15 @@ namespace Engine
         // 表示
         ShowWindow(m_hwnd, SW_SHOW);
 
+        // 初期化と逆の順
+        auto cleanup = [this]()
+        {
+            m_imgui.Shutdown();
+            m_renderer.Shutdown();
+            UnregisterClass(m_windowClass.lpszClassName, m_windowClass.hInstance);
+            CoUninitialize();
+        };
+
         if (!m_renderer.Initialize(m_hwnd))
         {
             OutputDebugStringA("Renderer::Initialize failed\n");
@@ -80,11 +89,7 @@ namespace Engine
         }
 
         OnShutdown();
-        m_imgui.Shutdown();
-        m_renderer.Shutdown();
-
-        UnregisterClass(m_windowClass.lpszClassName, m_windowClass.hInstance);
-        CoUninitialize();
+        cleanup();
         return 0;
     }
 }

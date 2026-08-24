@@ -12,10 +12,7 @@ using Engine::ActionPhase;
 
 class GameApp : public Engine::Application
 {
-    // ── 単位の決め事 ──────────────────────────
-    // このプロジェクトは 1 unit = 1 メートル とする。
-    // 重力 9.8、歩行 4m/s、パリィ判定の半径 0.5m のように、
-    // 現実の数字をそのまま調整値として使えるようにするため。
+    // 1 unit = 1 m
     static constexpr float kCharacterScale = 0.01f;  // 180  → 1.8m
     static constexpr float kTerrainScale = 20.0f;  //   2  → 40m 四方
 
@@ -32,27 +29,31 @@ protected:
     {
         SetClearColor(0.10f, 0.16f, 0.24f);
 
-        if (!m_terrain.Load("Assets/Model/SnowTerrain.fbx", "Assets/Model/grass_texture_01.png"))
+        if (!LoadTerrain())   return false;
+        if (!LoadCharacter()) return false;
+        SetupCamera();
+        SetupActions();
+
+        std::printf("Z = 攻撃   矢印キー = カメラ\n");
+        return true;
+    }
+
+private:
+    bool LoadTerrain()
+    {
+        if (!m_terrain.Load("Assets/Model/SnowTerrain.fbx",
+            "Assets/Model/grass_texture_01.png"))
         {
-            std::printf("FBX の読み込みに失敗しました\n");
+            std::printf("地形の読み込みに失敗しました\n");
             return false;
         }
+        m_terrain.SetStaticPipeline(true);   // ボーンが無いので Static で描く
+        return true;
+    }
 
-        m_camera.SetTarget(XMFLOAT3(0.0f, 0.0f, 0.0f));
-        m_camera.SetDistance(4.0f);
-        std::printf("矢印キーでカメラを回せます\n");
-
-        // ボーンを持たないメッシュなので Static パイプラインで描く。
-        m_terrain.SetStaticPipeline(true);
-
-        // カメラの距離を決めるため、モデルの大きさを出しておく。
-        const XMFLOAT3 mn = m_terrain.GetMin();
-        const XMFLOAT3 mx = m_terrain.GetMax();
-        std::printf("頂点数 %zu\n", m_terrain.GetVertices().size());
-        std::printf("範囲 X[%.1f .. %.1f]  Y[%.1f .. %.1f]  Z[%.1f .. %.1f]\n",
-            mn.x, mx.x, mn.y, mx.y, mn.z, mx.z);
-
-        // メッシュとスケルトンは1回だけ読む。この FBX のアニメは "Idle" になる。
+    bool LoadCharacter()
+    {
+        // メッシュとスケルトンは1回だけ。この FBX のアニメが "Idle" になる。
         if (!m_character.Load("Assets/Model/Bot_Idle.fbx", "", "Idle"))
         {
             std::printf("キャラクターの読み込みに失敗しました\n");
@@ -60,43 +61,39 @@ protected:
         }
 
         // モーションだけを追加で読む。メッシュは重複しない。
-        if (!m_character.LoadClip("Run", "Assets/Model/Bot_Run.fbx"))
-            std::printf("Run の読み込みに失敗\n");
-
-        if (!m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false))
-            std::printf("Slash の読み込みに失敗\n");
+        m_character.LoadClip("Run", "Assets/Model/Bot_Run.fbx");
+        m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false);
 
         m_character.Play("Idle");
-        std::printf("クリップ数 %zu / 再生中 %s\n",
-            m_character.GetClipCount(), m_character.CurrentClipName().c_str());
-        std::printf("1=Idle  2=Run  3=Slash で切り替え\n");
-
-        const XMFLOAT3 cmn = m_character.GetMin();
-        const XMFLOAT3 cmx = m_character.GetMax();
-        std::printf("キャラ ボーン数 %zu / フレーム数 %d\n",
-            m_character.GetBoneCount(), m_character.GetFrameCount());
-        std::printf("キャラ範囲 X[%.1f .. %.1f]  Y[%.1f .. %.1f]  Z[%.1f .. %.1f]\n",
-            cmn.x, cmx.x, cmn.y, cmx.y, cmn.z, cmx.z);
-
-        // ── アクションの定義 ──
-        m_actions.SetAnimator(&m_character.GetAnimator());
-        {
-            Engine::ActionData slash;
-            slash.name = "Slash";
-            slash.clipName = "Slash";
-            slash.startup = 30;   // 発生まで 12F
-            slash.active = 25;    // 判定 6F
-            slash.recovery = 30;   // 硬直 24F
-            slash.cancelFrom = 30;   // 30F 目からキャンセル可
-            slash.cancelTo = { "Slash" };   // 斬りから斬りへは繋げる
-            m_actions.AddAction(slash);
-            m_input.SetWindow(20);
-        }
-        std::printf("Z キーで攻撃\n");
-
+        std::printf("クリップ %zu 本 / ボーン %zu 本\n",
+            m_character.GetClipCount(), m_character.GetBoneCount());
         return true;
     }
 
+    void SetupCamera()
+    {
+        m_camera.SetTarget(XMFLOAT3(0.0f, 0.0f, 0.0f));
+        m_camera.SetDistance(4.0f);
+    }
+
+    void SetupActions()
+    {
+        m_actions.SetAnimator(&m_character.GetAnimator());
+
+        Engine::ActionData slash;
+        slash.name = "Slash";
+        slash.clipName = "Slash";
+        slash.startup = 30;
+        slash.active = 25;
+        slash.recovery = 30;
+        slash.cancelFrom = 30;
+        slash.cancelTo = { "Slash" };
+        m_actions.AddAction(slash);
+
+        m_input.SetWindow(20);
+    }
+
+protected:
     void OnUpdate(float dt) override
     {
         m_character.UpdateAnimation(dt);
@@ -138,9 +135,8 @@ protected:
             const ActionPhase now = m_actions.Phase();
             if (now != prevPhase)
             {
-                const char* names[] = { "----", "発生", "判定", "硬直" };
                 std::printf("[%3d F] %s\n",
-                    m_actions.ElapsedFrames(), names[(int)now]);
+                    m_actions.ElapsedFrames(), Engine::ToString(now));
             }
         }
     }
@@ -189,9 +185,8 @@ protected:
         ImGui::Separator();
 
         // 今の進行状況。
-        const char* names[] = { "----", "発生", "判定", "硬直" };
         ImGui::Text("いま : %s   %d F",
-            names[(int)m_actions.Phase()], m_actions.ElapsedFrames());
+            Engine::ToString(m_actions.Phase()), m_actions.ElapsedFrames());
 
         ImGui::End();
     }

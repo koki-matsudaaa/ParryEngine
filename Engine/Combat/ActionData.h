@@ -12,6 +12,17 @@ namespace Engine
         Recovery,   // 硬直
     };
 
+    inline const char* ToString(ActionPhase phase)
+    {
+        switch (phase)
+        {
+        case ActionPhase::Startup:  return "発生";
+        case ActionPhase::Active:   return "判定";
+        case ActionPhase::Recovery: return "硬直";
+        default:                    return "----";
+        }
+    }
+
     struct ActionData
     {
         std::string name;            // ゲーム側が指定する名前
