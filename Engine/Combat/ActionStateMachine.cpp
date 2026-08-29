@@ -41,7 +41,13 @@ namespace Engine
 
     void ActionStateMachine::Step()
     {
-        if (m_current < 0) return;
+        if (m_current < 0)
+        {
+            m_prevPhase = ActionPhase::None;
+            return;
+        }
+
+        m_prevPhase = Phase();   // 進める前の段階を覚えておく
 
         m_frame++;
 
@@ -98,5 +104,19 @@ namespace Engine
 
         return std::find(a.cancelTo.begin(), a.cancelTo.end(), next)
             != a.cancelTo.end();
+    }
+
+    bool ActionStateMachine::StartParry() const
+    {
+        return Phase() == ActionPhase::Active
+            && m_prevPhase != ActionPhase::Active;
+    }
+
+    bool ActionStateMachine::OnParry() const
+    {
+        if (m_current < 0) return false;
+
+        return m_actions[m_current].isParry
+            && Phase() == ActionPhase::Active;
     }
 }

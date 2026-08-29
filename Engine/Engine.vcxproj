@@ -56,6 +56,7 @@
     <ClInclude Include="Animation\Animator.h" />
     <ClInclude Include="Combat\ActionData.h" />
     <ClInclude Include="Combat\ActionStateMachine.h" />
+    <ClInclude Include="Combat\ParrySystem.h" />
     <ClInclude Include="Core\Application.h" />
     <ClInclude Include="Core\Dx12Context.h" />
     <ClInclude Include="Core\FixedTimestep.h" />
@@ -77,6 +78,7 @@
     <ClCompile Include="..\lib\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Animation\Animator.cpp" />
     <ClCompile Include="Combat\ActionStateMachine.cpp" />
+    <ClCompile Include="Combat\ParrySystem.cpp" />
     <ClCompile Include="Core\Application.cpp" />
     <ClCompile Include="Core\Dx12Context.cpp" />
     <ClCompile Include="Core\FixedTimestep.cpp" />

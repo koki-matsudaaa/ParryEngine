@@ -36,6 +36,8 @@ namespace Engine
         // キャンセルを受け付け始めるフレーム。-1 ならキャンセル不可。
         int cancelFrom = -1;
 
+        bool isParry = false;
+
         // キャンセルで移れるアクション名
         std::vector<std::string> cancelTo;
 

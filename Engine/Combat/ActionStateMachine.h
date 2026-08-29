@@ -41,6 +41,12 @@ namespace Engine
         // 今このアクションを中断して、指定の行動へ移れるか。
         bool CanCancelInto(const std::string& next) const;
 
+        // このフレームでパリィに入った
+        bool StartParry() const;
+
+        // 今パリィ受付中か
+        bool OnParry() const;
+
         // 登録されているアクションを名前で引く。
         const ActionData* Find(const std::string& name) const;
 
@@ -55,5 +61,8 @@ namespace Engine
 
         int m_current = -1;   // 実行中のアクション
         int m_frame = 0;      // アクションの経過フレーム
+
+        // 直前フレームの段階保持
+        ActionPhase m_prevPhase = ActionPhase::None;
     };
 }
