@@ -38,6 +38,9 @@ namespace Engine
 
         bool isParry = false;
 
+        // 体幹削り量
+        float postureDamage = 20.0f;
+
         // キャンセルで移れるアクション名
         std::vector<std::string> cancelTo;
 

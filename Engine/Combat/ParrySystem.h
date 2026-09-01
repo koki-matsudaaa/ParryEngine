@@ -20,5 +20,6 @@ namespace Engine
         // 調整パラメータ
         int hitStopOnParry = 10;
         int hitStopOnHit = 5;
+        float parryPostureDamage = 25.0f;
     };
 }

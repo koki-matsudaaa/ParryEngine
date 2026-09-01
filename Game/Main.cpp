@@ -4,6 +4,7 @@
 #include "Engine/Combat/ActionStateMachine.h"
 #include "Engine/Input/InputBuffer.h"
 #include "Engine/Combat/ParrySystem.h"
+#include "Engine/Combat/Posture.h"
 #include "imgui.h"
 
 #include <cstdio>
@@ -22,9 +23,12 @@ class GameApp : public Engine::Application
     Engine::Camera m_camera;
     Engine::ActionStateMachine m_actions;
     Engine::InputBuffer m_input;
+    Engine::ParrySystem m_parry;
+    Engine::Posture m_playerPosture;
+
     Engine::FbxModel m_enemy;
     Engine::ActionStateMachine m_enemyActions;
-    Engine::ParrySystem m_parry;
+    Engine::Posture m_enemyPosture;
 
     bool m_prevAttack = false;
     bool m_prevParry = false;
@@ -75,6 +79,7 @@ private:
         // モーションだけを追加で読む。メッシュは重複しない。
         m_character.LoadClip("Run", "Assets/Model/Bot_Run.fbx");
         m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false);
+        m_character.LoadClip("Parry", "Assets/Model/Bot_Block.fbx", false);
 
         m_character.Play("Idle");
         std::printf("クリップ %zu 本 / ボーン %zu 本\n",
@@ -87,6 +92,8 @@ private:
             return false;
         }
         m_enemy.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false);
+        m_enemy.LoadClip("Deflected", "Assets/Model/Bot_Deflected.fbx", false);
+        m_enemy.LoadClip("Break", "Assets/Model/Bot_Break.fbx", false);
         m_enemy.Play("Idle");
 
         return true;
@@ -114,17 +121,17 @@ private:
 
         m_input.SetWindow(20);
 
-        // ── パリィ ──
+        // パリィ
         Engine::ActionData parry;
         parry.name = "Parry";
-        parry.clipName = "Slash";   // 専用モーションが無いので流用
+        parry.clipName = "Parry";
         parry.isParry = true;
         parry.startup = 2;    // 構えるまで
-        parry.active = 7;    // 受付 7F
+        parry.active = 15;    // 受付 7F
         parry.recovery = 15;   // 外したときの隙
         m_actions.AddAction(parry);
 
-        // ── 敵の攻撃 ──
+        // 敵の攻撃
         m_enemyActions.SetAnimator(&m_enemy.GetAnimator());
 
         Engine::ActionData enemySlash;
@@ -134,6 +141,15 @@ private:
         enemySlash.active = 10;
         enemySlash.recovery = 30;
         m_enemyActions.AddAction(enemySlash);
+
+        // 弾かれた方
+        Engine::ActionData deflected;
+        deflected.name = "Deflected";
+        deflected.clipName = "Deflected";
+        deflected.startup = 0;
+        deflected.active = 0;
+        deflected.recovery = 25;
+        m_enemyActions.AddAction(deflected);
     }
 
 protected:
@@ -142,7 +158,7 @@ protected:
         m_character.UpdateAnimation(dt);
         m_enemy.UpdateAnimation(dt);
 
-        // 矢印キーでカメラを回す。
+        // 矢印キーでカメラを回す
         const float rotSpeed = 2.0f;   // ラジアン/秒
         if (GetAsyncKeyState(VK_LEFT) & 0x8000) m_camera.AddYaw(-rotSpeed * dt);
         if (GetAsyncKeyState(VK_RIGHT) & 0x8000) m_camera.AddYaw(+rotSpeed * dt);
@@ -153,7 +169,7 @@ protected:
         if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
             m_character.Play("Idle", 0.2f);
 
-        // ── 入力 ──
+        // 入力
         const bool attackHeld = (GetAsyncKeyState('Z') & 0x8000) != 0;
         if (attackHeld && !m_prevAttack) m_input.Push("Attack");
         m_prevAttack = attackHeld;
@@ -162,16 +178,14 @@ protected:
         if (parryHeld && !m_prevParry) m_input.Push("Parry");
         m_prevParry = parryHeld;
 
-        // ── ヒットストップ ──
-        // 当たった瞬間に世界を止める。止めている間はフレームを進めない。
-        // 手応えの大半はこの数フレームで決まる。
+        // ヒットストップ
         if (m_hitStop > 0)
         {
             m_hitStop--;
             return;
         }
 
-        // ── 行動の発動 ──
+        // 行動の発動
         if (m_input.Has("Parry") && m_actions.CanCancelInto("Parry"))
         {
             m_input.Consume("Parry");
@@ -183,43 +197,78 @@ protected:
             m_actions.StartAction("Slash");
         }
 
-        // ── 敵 ──
-        // 一定間隔で攻撃を繰り返すだけ。AI は M6 で作る。
-        if (m_enemyActions.IsIdle() && --m_enemyTimer <= 0)
+        // 敵
+        if (!m_enemyPosture.IsBroken()
+            && m_enemyActions.IsIdle() && --m_enemyTimer <= 0)
         {
             m_enemyActions.StartAction("EnemySlash");
             m_enemyTimer = m_enemyInterval;
         }
 
-        // ── 1フレーム進める ──
+        // 1フレーム進める
         m_actions.Step();
         m_enemyActions.Step();
         m_input.Step();
+        m_playerPosture.Step();
+        m_enemyPosture.Step();
 
-        // ── 判定 ──
+        // 判定
         switch (m_parry.Resolve(m_enemyActions, m_actions))
         {
         case Engine::ParryResult::Success:
+        {
             m_hitStop = m_parry.hitStopOnParry;
             m_parryCount++;
-            std::printf("弾いた!\n");
-            break;
 
+            if (m_enemyPosture.Add(m_parry.parryPostureDamage))
+            {
+                // 崩壊
+                m_enemyActions.Cancel();
+                m_enemy.Play("Break", 0.15f);
+                std::printf("弾いた! → 体幹崩壊!\n");
+            }
+            else
+            {
+                // 攻撃を中断させ、弾かれ硬直へ落とす。
+                m_enemyActions.StartAction("Deflected");
+                std::printf("弾いた!  (敵の体幹 %.0f / %.0f)\n",
+                    m_enemyPosture.Value(), m_enemyPosture.Max());
+            }
+            break;
+        }
         case Engine::ParryResult::Hit:
+        {
             m_hitStop = m_parry.hitStopOnHit;
             m_hitCount++;
-            std::printf("被弾\n");
-            break;
 
+            // この攻撃の威力を、攻撃側のアクションから引く
+            float dmg = 20.0f;
+            if (const auto* a = m_enemyActions.CurrentAction())
+                dmg = a->postureDamage;
+
+            if (m_playerPosture.Add(dmg))
+                std::printf("被弾 → こちらの体幹崩壊!\n");
+            else
+                std::printf("被弾  (自分の体幹 %.0f / %.0f)\n",
+                    m_playerPosture.Value(), m_playerPosture.Max());
+            break;
+        }
         default:
             break;
         }
 
-        // ── 待機へ戻す ──
+        // 待機へ戻す
         if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
             m_character.Play("Idle", 0.2f);
         if (m_enemyActions.IsIdle() && m_enemy.CurrentClipName() != "Idle")
             m_enemy.Play("Idle", 0.2f);
+        // 崩壊中は待機に戻さない
+        if (!m_enemyPosture.IsBroken()
+            && m_enemyActions.IsIdle()
+            && m_enemy.CurrentClipName() != "Idle")
+        {
+            m_enemy.Play("Idle", 0.3f);
+        }
     }
 
     void OnRender(float alpha) override
@@ -249,7 +298,6 @@ protected:
         ImGui::Text("Z キーで攻撃");
         ImGui::Separator();
 
-        // 単位はすべてフレーム (1/60秒)。ここを動かすと即座に効く。
         for (auto& a : m_actions.Actions())
         {
             ImGui::PushID(a.name.c_str());
@@ -266,14 +314,14 @@ protected:
             ImGui::PopID();
         }
 
-        // 先行入力の受付幅。手触りが一番変わる数字。
+        // 先行入力の受付
         int window = m_input.Window();
         if (ImGui::SliderInt("先行入力の受付", &window, 0, 30))
             m_input.SetWindow(window);
 
         ImGui::Separator();
 
-        // 今の進行状況。
+        // 今の進行状況
         ImGui::Text("いま : %s   %d F",
             Engine::ToString(m_actions.Phase()), m_actions.ElapsedFrames());
 
@@ -289,6 +337,24 @@ protected:
         ImGui::Separator();
         ImGui::Text("弾いた %d 回 / 食らった %d 回", m_parryCount, m_hitCount);
         if (ImGui::Button("記録をリセット")) { m_parryCount = 0; m_hitCount = 0; }
+
+        ImGui::Separator();
+        ImGui::Text("体幹");
+
+        ImGui::Text("自分");
+        ImGui::SameLine();
+        ImGui::ProgressBar(m_playerPosture.Ratio(), ImVec2(-1.0f, 0.0f),
+            m_playerPosture.IsBroken() ? "崩壊" : "");
+
+        ImGui::Text("敵  ");
+        ImGui::SameLine();
+        ImGui::ProgressBar(m_enemyPosture.Ratio(), ImVec2(-1.0f, 0.0f),
+            m_enemyPosture.IsBroken() ? "崩壊" : "");
+
+        ImGui::SliderFloat("弾き1回の体幹", &m_parry.parryPostureDamage, 5.0f, 60.0f);
+        ImGui::SliderFloat("体幹の自然回復", &m_enemyPosture.regenPerFrame, 0.0f, 1.0f);
+        ImGui::SliderInt("回復までの待ち", &m_enemyPosture.regenDelayFrames, 0, 180);
+        ImGui::SliderInt("崩壊の長さ", &m_enemyPosture.breakFrames, 30, 300);
 
         ImGui::End();
     }

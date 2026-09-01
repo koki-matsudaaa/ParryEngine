@@ -23,6 +23,11 @@ namespace Engine
         return (it != m_indexByName.end()) ? &m_actions[it->second] : nullptr;
     }
 
+    const ActionData* ActionStateMachine::CurrentAction() const
+    {
+        return (m_current >= 0) ? &m_actions[m_current] : nullptr;
+    }
+
     bool ActionStateMachine::StartAction(const std::string& name)
     {
         auto it = m_indexByName.find(name);

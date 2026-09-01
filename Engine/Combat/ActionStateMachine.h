@@ -50,6 +50,9 @@ namespace Engine
         // 登録されているアクションを名前で引く。
         const ActionData* Find(const std::string& name) const;
 
+        // 今実行中のアクション
+        const ActionData* CurrentAction() const;
+
         // 登録されているアクション一覧
         std::vector<ActionData>& Actions() { return m_actions; }
 
