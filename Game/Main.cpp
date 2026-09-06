@@ -5,9 +5,12 @@
 #include "Engine/Input/InputBuffer.h"
 #include "Engine/Combat/ParrySystem.h"
 #include "Engine/Combat/Posture.h"
+#include "Engine/Combat/ActionFile.h"
+
 #include "imgui.h"
 
 #include <cstdio>
+#include <vector>
 
 using namespace DirectX;
 using Engine::ActionPhase;
@@ -17,6 +20,8 @@ class GameApp : public Engine::Application
     // 1 unit = 1 m
     static constexpr float kCharacterScale = 0.01f; // 180  → 1.8m
     static constexpr float kTerrainScale = 20.0f;   //   2  → 40m 四方
+    static constexpr const char* kPlayerActionFile = "Assets/Data/PlayerActions.txt";
+    static constexpr const char* kEnemyActionFile = "Assets/Data/EnemyActions.txt";
 
     Engine::FbxModel m_terrain;
     Engine::FbxModel m_character;
@@ -49,6 +54,7 @@ protected:
         if (!LoadCharacter()) return false;
         SetupCamera();
         SetupActions();
+        LoadActionFiles();
 
         std::printf("Z = 攻撃   矢印キー = カメラ\n");
         return true;
@@ -150,6 +156,36 @@ private:
         deflected.active = 0;
         deflected.recovery = 25;
         m_enemyActions.AddAction(deflected);
+    }
+
+    static void Apply(Engine::ActionStateMachine& sm,
+        const std::vector<Engine::ActionData>& list)
+    {
+        sm.Clear();
+        for (const auto& a : list) sm.AddAction(a);
+    }
+
+    void LoadActionFiles()
+    {
+        std::vector<Engine::ActionData> list;
+
+        if (Engine::LoadActions(list, kPlayerActionFile))
+        {
+            Apply(m_actions, list);
+            std::printf("プレイヤーのアクションを読み込みました\n");
+        }
+        if (Engine::LoadActions(list, kEnemyActionFile))
+        {
+            Apply(m_enemyActions, list);
+            std::printf("敵のアクションを読み込みました\n");
+        }
+    }
+
+    void SaveActionFiles()
+    {
+        Engine::SaveActions(m_actions.Actions(), kPlayerActionFile);
+        Engine::SaveActions(m_enemyActions.Actions(), kEnemyActionFile);
+        std::printf("アクションを保存しました\n");
     }
 
 protected:
@@ -294,6 +330,11 @@ protected:
     void OnGui() override
     {
         ImGui::Begin("アクション調整");
+
+        if (ImGui::Button("保存")) SaveActionFiles();
+        ImGui::SameLine();
+        if (ImGui::Button("読み込み")) LoadActionFiles();
+        ImGui::Separator();
 
         ImGui::Text("Z キーで攻撃");
         ImGui::Separator();

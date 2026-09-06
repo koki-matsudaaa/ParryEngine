@@ -70,6 +70,15 @@ namespace Engine
         m_frame = 0;
     }
 
+    void ActionStateMachine::Clear()
+    {
+        m_actions.clear();
+        m_indexByName.clear();
+        m_current = -1;
+        m_frame = 0;
+        m_prevPhase = ActionPhase::None;
+    }
+
     ActionPhase ActionStateMachine::Phase() const
     {
         if (m_current < 0) return ActionPhase::None;

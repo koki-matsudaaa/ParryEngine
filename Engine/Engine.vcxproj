@@ -55,6 +55,7 @@
     <ClInclude Include="Animation\AnimationClip.h" />
     <ClInclude Include="Animation\Animator.h" />
     <ClInclude Include="Combat\ActionData.h" />
+    <ClInclude Include="Combat\ActionFile.h" />
     <ClInclude Include="Combat\ActionStateMachine.h" />
     <ClInclude Include="Combat\ParrySystem.h" />
     <ClInclude Include="Combat\Posture.h" />
@@ -78,6 +79,7 @@
     <ClCompile Include="..\lib\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\lib\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Animation\Animator.cpp" />
+    <ClCompile Include="Combat\ActionFile.cpp" />
     <ClCompile Include="Combat\ActionStateMachine.cpp" />
     <ClCompile Include="Combat\ParrySystem.cpp" />
     <ClCompile Include="Combat\Posture.cpp" />

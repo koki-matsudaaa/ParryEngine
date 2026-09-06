@@ -27,6 +27,9 @@ namespace Engine
         // 進行を打ち切って何もしていない状態に戻す。
         void Cancel();
 
+        // 登録済みのアクションを全部消す
+        void Clear();
+
         ActionPhase Phase() const;
         bool IsIdle() const { return m_current < 0; }
 
