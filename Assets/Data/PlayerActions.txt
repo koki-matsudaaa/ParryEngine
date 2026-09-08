@@ -1,22 +1,20 @@
 # アクション定義
-# 単位はフレーム (1/60秒)。手で編集しても構わない。
-
 [Slash]
 clip = Slash
 blendSeconds = 0.1
 startup = 30
 active = 25
 recovery = 30
-cancelFrom = 30
+cancelFrom = 20
 isParry = 0
 postureDamage = 20
-cancelTo = Slash
+cancelTo = Parry, Slash
 
 [Parry]
 clip = Parry
 blendSeconds = 0.1
 startup = 2
-active = 15
+active = 25
 recovery = 15
 cancelFrom = -1
 isParry = 1

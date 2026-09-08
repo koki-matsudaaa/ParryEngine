@@ -1,6 +1,4 @@
 # アクション定義
-# 単位はフレーム (1/60秒)。手で編集しても構わない。
-
 [EnemySlash]
 clip = Slash
 blendSeconds = 0.1

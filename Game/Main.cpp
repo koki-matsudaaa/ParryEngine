@@ -6,11 +6,13 @@
 #include "Engine/Combat/ParrySystem.h"
 #include "Engine/Combat/Posture.h"
 #include "Engine/Combat/ActionFile.h"
+#include "Engine/Tools/Timeline.h"
 
 #include "imgui.h"
 
 #include <cstdio>
 #include <vector>
+#include <algorithm>
 
 using namespace DirectX;
 using Engine::ActionPhase;
@@ -44,6 +46,8 @@ class GameApp : public Engine::Application
 
     int  m_parryCount = 0;     // 弾いた回数
     int  m_hitCount = 0;       // 食らった回数
+
+    float m_zoom = 6.0f;       // タイムラインの横倍率
 
 protected:
     bool OnStart() override
@@ -122,7 +126,7 @@ private:
         slash.active = 25;
         slash.recovery = 30;
         slash.cancelFrom = 30;
-        slash.cancelTo = { "Slash" };
+        slash.cancelTo = { "Slash", "Parry" };
         m_actions.AddAction(slash);
 
         m_input.SetWindow(20);
@@ -339,15 +343,45 @@ protected:
         ImGui::Text("Z キーで攻撃");
         ImGui::Separator();
 
+        Engine::DrawPhaseLegend();
+        ImGui::SliderFloat("拡大", &m_zoom, 2.0f, 16.0f, "%.1f px/F");
+        Engine::DrawFrameRuler(120, m_zoom);
+        ImGui::Separator();
+
         for (auto& a : m_actions.Actions())
         {
             ImGui::PushID(a.name.c_str());
             ImGui::Text("[ %s ]", a.name.c_str());
 
+            // 実行中のアクションだけ再生位置を描く
+            const bool running = (m_actions.CurrentActionName() == a.name);
+            Engine::DrawActionBar(a, running ? m_actions.ElapsedFrames() : -1,
+                m_zoom);
+
             ImGui::SliderInt("発生", &a.startup, 0, 60);
             ImGui::SliderInt("判定", &a.active, 1, 60);
             ImGui::SliderInt("硬直", &a.recovery, 0, 90);
             ImGui::SliderInt("キャンセル", &a.cancelFrom, -1, 90);
+
+            // キャンセルで移れる行動
+            if (ImGui::TreeNode("キャンセル先"))
+            {
+                for (auto& other : m_actions.Actions())
+                {
+                    auto it = std::find(a.cancelTo.begin(), a.cancelTo.end(),
+                        other.name);
+                    bool on = (it != a.cancelTo.end());
+
+                    if (ImGui::Checkbox(other.name.c_str(), &on))
+                    {
+                        if (on) a.cancelTo.push_back(other.name);
+                        else    a.cancelTo.erase(it);
+                    }
+                }
+                if (a.cancelTo.empty())
+                    ImGui::TextDisabled("空 = 何にでも移れる");
+                ImGui::TreePop();
+            }
 
             ImGui::Text("合計 %d F (%.2f 秒)",
                 a.TotalFrames(), a.TotalFrames() / 60.0f);
@@ -370,6 +404,17 @@ protected:
         ImGui::Text("敵 : %s  %d F",
             Engine::ToString(m_enemyActions.Phase()),
             m_enemyActions.ElapsedFrames());
+
+        for (auto& a : m_enemyActions.Actions())
+        {
+            ImGui::PushID(a.name.c_str());
+            ImGui::Text("[ %s ]", a.name.c_str());
+
+            const bool running = (m_enemyActions.CurrentActionName() == a.name);
+            Engine::DrawActionBar(a, running ? m_enemyActions.ElapsedFrames() : -1,
+                m_zoom);
+            ImGui::PopID();
+        }
 
         ImGui::SliderInt("敵の攻撃間隔", &m_enemyInterval, 30, 240);
         ImGui::SliderInt("弾き時の停止", &m_parry.hitStopOnParry, 0, 30);
