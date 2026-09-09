@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "Engine/Combat/ActionData.h"
+#include "Engine/Tools/TimelineRecorder.h"
 
 namespace Engine
 {
@@ -13,4 +14,6 @@ namespace Engine
 
     // 色の意味
     void DrawPhaseLegend();
+
+    void DrawRecordedTrack(const TimelineRecorder& rec, float pixelsPerFrame = 3.0f);
 }

@@ -71,6 +71,7 @@
     <ClInclude Include="Input\InputBuffer.h" />
     <ClInclude Include="Tools\ImguiLayer.h" />
     <ClInclude Include="Tools\Timeline.h" />
+    <ClInclude Include="Tools\TimelineRecorder.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\lib\imgui\imgui.cpp" />
@@ -96,6 +97,7 @@
     <ClCompile Include="Input\InputBuffer.cpp" />
     <ClCompile Include="Tools\ImguiLayer.cpp" />
     <ClCompile Include="Tools\Timeline.cpp" />
+    <ClCompile Include="Tools\TimelineRecorder.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

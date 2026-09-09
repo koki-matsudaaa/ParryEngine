@@ -10,9 +10,7 @@
 #include <iostream>
 #endif
 
-// ──────────────────────────────────────────
-// グローバル変数の実体
-// ──────────────────────────────────────────
+// ---グローバル変数の実体---
 const unsigned int window_width = 1280;
 const unsigned int window_height = 720;
 
@@ -26,9 +24,7 @@ IDXGISwapChain4* _swapchain = nullptr;
 map<string, LoadLambda_t>   loadLambdaTable;
 map<string, ID3D12Resource*> _resourceTable;
 
-// ──────────────────────────────────────────
-// デバッグ出力
-// ──────────────────────────────────────────
+// ---デバッグ出力---
 void DebugOutputFormatString(const char* format, ...) {
 #ifdef _DEBUG
     va_list valist;
@@ -38,9 +34,7 @@ void DebugOutputFormatString(const char* format, ...) {
 #endif
 }
 
-// ──────────────────────────────────────────
-// ウィンドウ
-// ──────────────────────────────────────────
+// ---ウィンドウ---
 
 // ImGuiのハンドラを前方宣言 (imgui_impl_win32.h が提供)
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(
@@ -81,12 +75,11 @@ void CreateGameWindow(HWND& hwnd, WNDCLASSEX& windowClass) {
         nullptr);
 }
 
-// ──────────────────────────────────────────
-// DX12 初期化
-// ──────────────────────────────────────────
+// ---DX12 初期化---
 void EnableDebugLayer() {
     ID3D12Debug* debugLayer = nullptr;
-    D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer));
+    if (FAILED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugLayer))))
+        return;
     debugLayer->EnableDebugLayer();
     debugLayer->Release();
 }
@@ -207,9 +200,7 @@ HRESULT CreateFinalRenderTarget(ID3D12DescriptorHeap*& rtvHeaps,
     return S_OK;
 }
 
-// ──────────────────────────────────────────
-// テクスチャユーティリティ
-// ──────────────────────────────────────────
+// ---テクスチャユーティリティ---
 ID3D12Resource* CreateGrayGradationTexture() {
     D3D12_RESOURCE_DESC resDesc = {};
     resDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -369,9 +360,7 @@ ID3D12Resource* LoadTextureFromFile(std::string& texPath) {
     return texbuff;
 }
 
-// ──────────────────────────────────────────
-// 文字列ユーティリティ
-// ──────────────────────────────────────────
+// ---文字列ユーティリティ---
 std::string GetTexturePathFromModelAndTexPath(const std::string& modelPath,
     const char* texPath) {
     int pathIndex1 = (int)modelPath.rfind('/');

@@ -7,6 +7,7 @@
 #include "Engine/Combat/Posture.h"
 #include "Engine/Combat/ActionFile.h"
 #include "Engine/Tools/Timeline.h"
+#include "Engine/Tools/TimelineRecorder.h"
 
 #include "imgui.h"
 
@@ -36,6 +37,8 @@ class GameApp : public Engine::Application
     Engine::FbxModel m_enemy;
     Engine::ActionStateMachine m_enemyActions;
     Engine::Posture m_enemyPosture;
+    Engine::TimelineRecorder m_playerTrack;
+    Engine::TimelineRecorder m_enemyTrack;
 
     bool m_prevAttack = false;
     bool m_prevParry = false;
@@ -48,6 +51,9 @@ class GameApp : public Engine::Application
     int  m_hitCount = 0;       // 食らった回数
 
     float m_zoom = 6.0f;       // タイムラインの横倍率
+    float m_trackZoom = 3.0f;        // 履歴の横倍率
+    bool  m_pauseOnParry = false;    // 弾いた瞬間に記録を止める
+    int   m_lastParryOffset = -1;    // 受付の何F目で成立したか
 
 protected:
     bool OnStart() override
@@ -59,6 +65,10 @@ protected:
         SetupCamera();
         SetupActions();
         LoadActionFiles();
+
+        // 履歴をためる
+        m_playerTrack.SetCapacity(240);
+        m_enemyTrack.SetCapacity(240);
 
         std::printf("Z = 攻撃   矢印キー = カメラ\n");
         return true;
@@ -252,6 +262,10 @@ protected:
         m_playerPosture.Step();
         m_enemyPosture.Step();
 
+        // 進めた後の状態を記録する
+        m_playerTrack.Record(m_actions);
+        m_enemyTrack.Record(m_enemyActions);
+
         // 判定
         switch (m_parry.Resolve(m_enemyActions, m_actions))
         {
@@ -259,6 +273,16 @@ protected:
         {
             m_hitStop = m_parry.hitStopOnParry;
             m_parryCount++;
+
+            m_playerTrack.MarkEvent(Engine::TimelineEvent::ParrySuccess);
+            m_enemyTrack.MarkEvent(Engine::TimelineEvent::ParrySuccess);
+
+            // 受付の何フレーム目で取れたか
+            if (const auto* a = m_actions.CurrentAction())
+                m_lastParryOffset = m_actions.ElapsedFrames() - a->startup;
+
+            // 弾いた瞬間から１コマずつ進める
+            if (m_pauseOnParry) Clock().SetPaused(true);
 
             if (m_enemyPosture.Add(m_parry.parryPostureDamage))
             {
@@ -280,6 +304,9 @@ protected:
         {
             m_hitStop = m_parry.hitStopOnHit;
             m_hitCount++;
+
+            m_playerTrack.MarkEvent(Engine::TimelineEvent::Hit);
+            m_enemyTrack.MarkEvent(Engine::TimelineEvent::Hit);
 
             // この攻撃の威力を、攻撃側のアクションから引く
             float dmg = 20.0f;
@@ -441,6 +468,53 @@ protected:
         ImGui::SliderFloat("体幹の自然回復", &m_enemyPosture.regenPerFrame, 0.0f, 1.0f);
         ImGui::SliderInt("回復までの待ち", &m_enemyPosture.regenDelayFrames, 0, 180);
         ImGui::SliderInt("崩壊の長さ", &m_enemyPosture.breakFrames, 30, 300);
+
+        ImGui::End();
+
+        ImGui::Begin("タイムライン");
+
+        // ---コマ送り---
+        Engine::FixedTimestep& clock = Clock();
+
+        if (!ImGui::GetIO().WantCaptureKeyboard)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_Space, false))
+                clock.SetPaused(!clock.IsPaused());
+
+            // 押しっぱなしで連続して進む
+            if (clock.IsPaused() && ImGui::IsKeyPressed(ImGuiKey_N, true))
+                clock.RequestSingleStep();
+        }
+
+        if (ImGui::Button(clock.IsPaused() ? "再開 (Space)" : "一時停止 (Space)"))
+            clock.SetPaused(!clock.IsPaused());
+
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!clock.IsPaused());
+        if (ImGui::Button("1コマ進める (N)")) clock.RequestSingleStep();
+        ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        ImGui::Text("%llu F", clock.FrameCount());
+        ImGui::Separator();
+
+        Engine::DrawPhaseLegend();
+        ImGui::SliderFloat("拡大", &m_trackZoom, 1.0f, 8.0f, "%.1f px/F");
+        ImGui::Checkbox("弾いたら止める", &m_pauseOnParry);
+
+        if (ImGui::Button("消去")) { m_playerTrack.Clear(); m_enemyTrack.Clear(); }
+
+        ImGui::Text("自分");
+        Engine::DrawRecordedTrack(m_playerTrack, m_trackZoom);
+
+        ImGui::Text("敵  ");
+        Engine::DrawRecordedTrack(m_enemyTrack, m_trackZoom);
+
+        ImGui::Separator();
+        if (m_lastParryOffset >= 0)
+            ImGui::Text("直前の成立: 受付の %d F目", m_lastParryOffset);
+        else
+            ImGui::TextDisabled("直前の成立: まだ無し");
 
         ImGui::End();
     }

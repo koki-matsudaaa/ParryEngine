@@ -12,6 +12,7 @@ namespace
 
     constexpr float kBarHeight = 18.0f;
     constexpr float kRulerHeight = 14.0f;
+    constexpr float kTrackHeight = 14.0f;
 
     // 1区間を塗る
     float FillSegment(ImDrawList* dl, ImVec2 origin, float x,
@@ -91,5 +92,48 @@ namespace Engine
         ImGui::TextColored(kRecovery, "硬直"); ImGui::SameLine();
         ImGui::TextColored(kParry, "受付"); ImGui::SameLine();
         ImGui::TextDisabled("| 黒線=キャンセル可 白線=再生位置");
+    }
+    
+    void DrawRecordedTrack(const TimelineRecorder& rec, float ppf)
+    {
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 origin = ImGui::GetCursorScreenPos();
+        const float  full = rec.Capacity() * ppf;
+
+        // 何もしていない時間も枠として見せる
+        dl->AddRectFilled(origin, ImVec2(origin.x + full, origin.y + kTrackHeight),
+            IM_COL32(28, 28, 32, 255));
+
+        for (int i = 0; i < rec.Count(); i++)
+        {
+            const FrameRecord& f = rec.At(i);
+            if (f.phase == ActionPhase::None) continue;
+
+            const ImVec4* c = &kRecovery;
+            if (f.phase == ActionPhase::Startup)     c = &kStartup;
+            else if (f.phase == ActionPhase::Active) c = f.isParry ? &kParry : &kActive;
+
+            const float x = origin.x + i * ppf;
+            dl->AddRectFilled(ImVec2(x, origin.y),
+                ImVec2(x + ppf, origin.y + kTrackHeight),
+                ImGui::GetColorU32(*c));
+        }
+
+        // 起きたこと
+        for (int i = 0; i < rec.Count(); i++)
+        {
+            const TimelineEvent e = rec.EventAt(i);
+            if (e == TimelineEvent::None) continue;
+
+            const float x = origin.x + i * ppf + ppf * 0.5f;
+            const ImU32 col = (e == TimelineEvent::ParrySuccess)
+                ? IM_COL32(255, 255, 255, 255)
+                : IM_COL32(255, 80, 80, 255);
+
+            dl->AddLine(ImVec2(x, origin.y - 4.0f),
+                ImVec2(x, origin.y + kTrackHeight + 4.0f), col, 2.0f);
+        }
+
+        ImGui::Dummy(ImVec2(full, kTrackHeight));
     }
 }
