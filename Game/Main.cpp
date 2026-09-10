@@ -3,9 +3,17 @@
 #include "Engine/Graphics/Camera.h"
 #include "Engine/Combat/ActionStateMachine.h"
 #include "Engine/Input/InputBuffer.h"
+#include "Engine/Combat/ParrySystem.h"
+#include "Engine/Combat/Posture.h"
+#include "Engine/Combat/ActionFile.h"
+#include "Engine/Tools/Timeline.h"
+#include "Engine/Tools/TimelineRecorder.h"
+
 #include "imgui.h"
 
 #include <cstdio>
+#include <vector>
+#include <algorithm>
 
 using namespace DirectX;
 using Engine::ActionPhase;
@@ -13,16 +21,39 @@ using Engine::ActionPhase;
 class GameApp : public Engine::Application
 {
     // 1 unit = 1 m
-    static constexpr float kCharacterScale = 0.01f;  // 180  → 1.8m
-    static constexpr float kTerrainScale = 20.0f;  //   2  → 40m 四方
+    static constexpr float kCharacterScale = 0.01f; // 180  → 1.8m
+    static constexpr float kTerrainScale = 20.0f;   //   2  → 40m 四方
+    static constexpr const char* kPlayerActionFile = "Assets/Data/PlayerActions.txt";
+    static constexpr const char* kEnemyActionFile = "Assets/Data/EnemyActions.txt";
 
     Engine::FbxModel m_terrain;
     Engine::FbxModel m_character;
     Engine::Camera m_camera;
     Engine::ActionStateMachine m_actions;
     Engine::InputBuffer m_input;
+    Engine::ParrySystem m_parry;
+    Engine::Posture m_playerPosture;
 
-    bool m_prevAttack = false;  // 押した瞬間を拾うための前フレーム状態
+    Engine::FbxModel m_enemy;
+    Engine::ActionStateMachine m_enemyActions;
+    Engine::Posture m_enemyPosture;
+    Engine::TimelineRecorder m_playerTrack;
+    Engine::TimelineRecorder m_enemyTrack;
+
+    bool m_prevAttack = false;
+    bool m_prevParry = false;
+
+    int  m_hitStop = 0;        // 残りの停止フレーム
+    int  m_enemyTimer = 0;     // 次の攻撃までの残りフレーム
+    int  m_enemyInterval = 90; // 攻撃の間隔
+
+    int  m_parryCount = 0;     // 弾いた回数
+    int  m_hitCount = 0;       // 食らった回数
+
+    float m_zoom = 6.0f;       // タイムラインの横倍率
+    float m_trackZoom = 3.0f;        // 履歴の横倍率
+    bool  m_pauseOnParry = false;    // 弾いた瞬間に記録を止める
+    int   m_lastParryOffset = -1;    // 受付の何F目で成立したか
 
 protected:
     bool OnStart() override
@@ -33,6 +64,11 @@ protected:
         if (!LoadCharacter()) return false;
         SetupCamera();
         SetupActions();
+        LoadActionFiles();
+
+        // 履歴をためる
+        m_playerTrack.SetCapacity(240);
+        m_enemyTrack.SetCapacity(240);
 
         std::printf("Z = 攻撃   矢印キー = カメラ\n");
         return true;
@@ -63,10 +99,23 @@ private:
         // モーションだけを追加で読む。メッシュは重複しない。
         m_character.LoadClip("Run", "Assets/Model/Bot_Run.fbx");
         m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false);
+        m_character.LoadClip("Parry", "Assets/Model/Bot_Block.fbx", false);
 
         m_character.Play("Idle");
         std::printf("クリップ %zu 本 / ボーン %zu 本\n",
             m_character.GetClipCount(), m_character.GetBoneCount());
+
+        // 敵
+        if (!m_enemy.Load("Assets/Model/Bot_Idle.fbx", "", "Idle"))
+        {
+            std::printf("敵の読み込みに失敗しました\n");
+            return false;
+        }
+        m_enemy.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false);
+        m_enemy.LoadClip("Deflected", "Assets/Model/Bot_Deflected.fbx", false);
+        m_enemy.LoadClip("Break", "Assets/Model/Bot_Break.fbx", false);
+        m_enemy.Play("Idle");
+
         return true;
     }
 
@@ -87,18 +136,79 @@ private:
         slash.active = 25;
         slash.recovery = 30;
         slash.cancelFrom = 30;
-        slash.cancelTo = { "Slash" };
+        slash.cancelTo = { "Slash", "Parry" };
         m_actions.AddAction(slash);
 
         m_input.SetWindow(20);
+
+        // パリィ
+        Engine::ActionData parry;
+        parry.name = "Parry";
+        parry.clipName = "Parry";
+        parry.isParry = true;
+        parry.startup = 2;    // 構えるまで
+        parry.active = 15;    // 受付 7F
+        parry.recovery = 15;   // 外したときの隙
+        m_actions.AddAction(parry);
+
+        // 敵の攻撃
+        m_enemyActions.SetAnimator(&m_enemy.GetAnimator());
+
+        Engine::ActionData enemySlash;
+        enemySlash.name = "EnemySlash";
+        enemySlash.clipName = "Slash";
+        enemySlash.startup = 40;   // 見てから反応できる長さ
+        enemySlash.active = 10;
+        enemySlash.recovery = 30;
+        m_enemyActions.AddAction(enemySlash);
+
+        // 弾かれた方
+        Engine::ActionData deflected;
+        deflected.name = "Deflected";
+        deflected.clipName = "Deflected";
+        deflected.startup = 0;
+        deflected.active = 0;
+        deflected.recovery = 25;
+        m_enemyActions.AddAction(deflected);
+    }
+
+    static void Apply(Engine::ActionStateMachine& sm,
+        const std::vector<Engine::ActionData>& list)
+    {
+        sm.Clear();
+        for (const auto& a : list) sm.AddAction(a);
+    }
+
+    void LoadActionFiles()
+    {
+        std::vector<Engine::ActionData> list;
+
+        if (Engine::LoadActions(list, kPlayerActionFile))
+        {
+            Apply(m_actions, list);
+            std::printf("プレイヤーのアクションを読み込みました\n");
+        }
+        if (Engine::LoadActions(list, kEnemyActionFile))
+        {
+            Apply(m_enemyActions, list);
+            std::printf("敵のアクションを読み込みました\n");
+        }
+    }
+
+    void SaveActionFiles()
+    {
+        Engine::SaveActions(m_actions.Actions(), kPlayerActionFile);
+        Engine::SaveActions(m_enemyActions.Actions(), kEnemyActionFile);
+        std::printf("アクションを保存しました\n");
     }
 
 protected:
     void OnUpdate(float dt) override
     {
         m_character.UpdateAnimation(dt);
+        m_enemy.UpdateAnimation(dt);
 
-        // 矢印キーでカメラを回す。
+        // 矢印キーでカメラを回す
         const float rotSpeed = 2.0f;   // ラジアン/秒
         if (GetAsyncKeyState(VK_LEFT) & 0x8000) m_camera.AddYaw(-rotSpeed * dt);
         if (GetAsyncKeyState(VK_RIGHT) & 0x8000) m_camera.AddYaw(+rotSpeed * dt);
@@ -109,35 +219,122 @@ protected:
         if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
             m_character.Play("Idle", 0.2f);
 
-        // ── 攻撃 ──
+        // 入力
         const bool attackHeld = (GetAsyncKeyState('Z') & 0x8000) != 0;
         if (attackHeld && !m_prevAttack) m_input.Push("Attack");
         m_prevAttack = attackHeld;
 
-        // 受け付けられる状態なら、溜まっている入力を消費して発動する。
-        // 硬直中に押した入力も、ここで拾われる。
-        if (m_input.Has("Attack") && m_actions.CanCancelInto("Slash"))
-        {
-            const int age = m_input.AgeOf("Attack");
-            m_input.Consume("Attack");
-            m_actions.StartAction("Slash");
+        const bool parryHeld = (GetAsyncKeyState('X') & 0x8000) != 0;
+        if (parryHeld && !m_prevParry) m_input.Push("Parry");
+        m_prevParry = parryHeld;
 
-            if (age > 0) std::printf("  (%dF 前の入力で発動)\n", age);
+        // ヒットストップ
+        if (m_hitStop > 0)
+        {
+            m_hitStop--;
+            return;
         }
 
-        // アクションを1フレーム進める。
-        const ActionPhase prevPhase = m_actions.Phase();
-        m_actions.Step();
-        m_input.Step();
-
-        // 段階が変わったときだけ表示する。
+        // 行動の発動
+        if (m_input.Has("Parry") && m_actions.CanCancelInto("Parry"))
         {
-            const ActionPhase now = m_actions.Phase();
-            if (now != prevPhase)
+            m_input.Consume("Parry");
+            m_actions.StartAction("Parry");
+        }
+        else if (m_input.Has("Attack") && m_actions.CanCancelInto("Slash"))
+        {
+            m_input.Consume("Attack");
+            m_actions.StartAction("Slash");
+        }
+
+        // 敵
+        if (!m_enemyPosture.IsBroken()
+            && m_enemyActions.IsIdle() && --m_enemyTimer <= 0)
+        {
+            m_enemyActions.StartAction("EnemySlash");
+            m_enemyTimer = m_enemyInterval;
+        }
+
+        // 1フレーム進める
+        m_actions.Step();
+        m_enemyActions.Step();
+        m_input.Step();
+        m_playerPosture.Step();
+        m_enemyPosture.Step();
+
+        // 進めた後の状態を記録する
+        m_playerTrack.Record(m_actions);
+        m_enemyTrack.Record(m_enemyActions);
+
+        // 判定
+        switch (m_parry.Resolve(m_enemyActions, m_actions))
+        {
+        case Engine::ParryResult::Success:
+        {
+            m_hitStop = m_parry.hitStopOnParry;
+            m_parryCount++;
+
+            m_playerTrack.MarkEvent(Engine::TimelineEvent::ParrySuccess);
+            m_enemyTrack.MarkEvent(Engine::TimelineEvent::ParrySuccess);
+
+            // 受付の何フレーム目で取れたか
+            if (const auto* a = m_actions.CurrentAction())
+                m_lastParryOffset = m_actions.ElapsedFrames() - a->startup;
+
+            // 弾いた瞬間から１コマずつ進める
+            if (m_pauseOnParry) Clock().SetPaused(true);
+
+            if (m_enemyPosture.Add(m_parry.parryPostureDamage))
             {
-                std::printf("[%3d F] %s\n",
-                    m_actions.ElapsedFrames(), Engine::ToString(now));
+                // 崩壊
+                m_enemyActions.Cancel();
+                m_enemy.Play("Break", 0.15f);
+                std::printf("弾いた! → 体幹崩壊!\n");
             }
+            else
+            {
+                // 攻撃を中断させ、弾かれ硬直へ落とす。
+                m_enemyActions.StartAction("Deflected");
+                std::printf("弾いた!  (敵の体幹 %.0f / %.0f)\n",
+                    m_enemyPosture.Value(), m_enemyPosture.Max());
+            }
+            break;
+        }
+        case Engine::ParryResult::Hit:
+        {
+            m_hitStop = m_parry.hitStopOnHit;
+            m_hitCount++;
+
+            m_playerTrack.MarkEvent(Engine::TimelineEvent::Hit);
+            m_enemyTrack.MarkEvent(Engine::TimelineEvent::Hit);
+
+            // この攻撃の威力を、攻撃側のアクションから引く
+            float dmg = 20.0f;
+            if (const auto* a = m_enemyActions.CurrentAction())
+                dmg = a->postureDamage;
+
+            if (m_playerPosture.Add(dmg))
+                std::printf("被弾 → こちらの体幹崩壊!\n");
+            else
+                std::printf("被弾  (自分の体幹 %.0f / %.0f)\n",
+                    m_playerPosture.Value(), m_playerPosture.Max());
+            break;
+        }
+        default:
+            break;
+        }
+
+        // 待機へ戻す
+        if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
+            m_character.Play("Idle", 0.2f);
+        if (m_enemyActions.IsIdle() && m_enemy.CurrentClipName() != "Idle")
+            m_enemy.Play("Idle", 0.2f);
+        // 崩壊中は待機に戻さない
+        if (!m_enemyPosture.IsBroken()
+            && m_enemyActions.IsIdle()
+            && m_enemy.CurrentClipName() != "Idle")
+        {
+            m_enemy.Play("Idle", 0.3f);
         }
     }
 
@@ -147,29 +344,71 @@ protected:
 
         GetRenderer().SetCamera(m_camera.View(), m_camera.Projection(), m_camera.Eye());
 
-        GetRenderer().DrawModel(&m_terrain,
-            XMMatrixScaling(kTerrainScale, kTerrainScale, kTerrainScale));
+        //GetRenderer().DrawModel(&m_terrain,
+        //    XMMatrixScaling(kTerrainScale, kTerrainScale, kTerrainScale));
+
+        // Player
         GetRenderer().DrawModel(&m_character,
             XMMatrixScaling(kCharacterScale, kCharacterScale, kCharacterScale));
+
+        // 敵。
+        GetRenderer().DrawModel(&m_enemy,
+            XMMatrixScaling(kCharacterScale, kCharacterScale, kCharacterScale)
+            * XMMatrixRotationY(XM_PI)
+            * XMMatrixTranslation(0.0f, 0.0f, 1.5f));
     }
 
     void OnGui() override
     {
         ImGui::Begin("アクション調整");
 
+        if (ImGui::Button("保存")) SaveActionFiles();
+        ImGui::SameLine();
+        if (ImGui::Button("読み込み")) LoadActionFiles();
+        ImGui::Separator();
+
         ImGui::Text("Z キーで攻撃");
         ImGui::Separator();
 
-        // 単位はすべてフレーム (1/60秒)。ここを動かすと即座に効く。
+        Engine::DrawPhaseLegend();
+        ImGui::SliderFloat("拡大", &m_zoom, 2.0f, 16.0f, "%.1f px/F");
+        Engine::DrawFrameRuler(120, m_zoom);
+        ImGui::Separator();
+
         for (auto& a : m_actions.Actions())
         {
             ImGui::PushID(a.name.c_str());
             ImGui::Text("[ %s ]", a.name.c_str());
 
+            // 実行中のアクションだけ再生位置を描く
+            const bool running = (m_actions.CurrentActionName() == a.name);
+            Engine::DrawActionBar(a, running ? m_actions.ElapsedFrames() : -1,
+                m_zoom);
+
             ImGui::SliderInt("発生", &a.startup, 0, 60);
             ImGui::SliderInt("判定", &a.active, 1, 60);
             ImGui::SliderInt("硬直", &a.recovery, 0, 90);
             ImGui::SliderInt("キャンセル", &a.cancelFrom, -1, 90);
+
+            // キャンセルで移れる行動
+            if (ImGui::TreeNode("キャンセル先"))
+            {
+                for (auto& other : m_actions.Actions())
+                {
+                    auto it = std::find(a.cancelTo.begin(), a.cancelTo.end(),
+                        other.name);
+                    bool on = (it != a.cancelTo.end());
+
+                    if (ImGui::Checkbox(other.name.c_str(), &on))
+                    {
+                        if (on) a.cancelTo.push_back(other.name);
+                        else    a.cancelTo.erase(it);
+                    }
+                }
+                if (a.cancelTo.empty())
+                    ImGui::TextDisabled("空 = 何にでも移れる");
+                ImGui::TreePop();
+            }
 
             ImGui::Text("合計 %d F (%.2f 秒)",
                 a.TotalFrames(), a.TotalFrames() / 60.0f);
@@ -177,16 +416,105 @@ protected:
             ImGui::PopID();
         }
 
-        // 先行入力の受付幅。手触りが一番変わる数字。
+        // 先行入力の受付
         int window = m_input.Window();
         if (ImGui::SliderInt("先行入力の受付", &window, 0, 30))
             m_input.SetWindow(window);
 
         ImGui::Separator();
 
-        // 今の進行状況。
+        // 今の進行状況
         ImGui::Text("いま : %s   %d F",
             Engine::ToString(m_actions.Phase()), m_actions.ElapsedFrames());
+
+        ImGui::Separator();
+        ImGui::Text("敵 : %s  %d F",
+            Engine::ToString(m_enemyActions.Phase()),
+            m_enemyActions.ElapsedFrames());
+
+        for (auto& a : m_enemyActions.Actions())
+        {
+            ImGui::PushID(a.name.c_str());
+            ImGui::Text("[ %s ]", a.name.c_str());
+
+            const bool running = (m_enemyActions.CurrentActionName() == a.name);
+            Engine::DrawActionBar(a, running ? m_enemyActions.ElapsedFrames() : -1,
+                m_zoom);
+            ImGui::PopID();
+        }
+
+        ImGui::SliderInt("敵の攻撃間隔", &m_enemyInterval, 30, 240);
+        ImGui::SliderInt("弾き時の停止", &m_parry.hitStopOnParry, 0, 30);
+        ImGui::SliderInt("被弾時の停止", &m_parry.hitStopOnHit, 0, 30);
+
+        ImGui::Separator();
+        ImGui::Text("弾いた %d 回 / 食らった %d 回", m_parryCount, m_hitCount);
+        if (ImGui::Button("記録をリセット")) { m_parryCount = 0; m_hitCount = 0; }
+
+        ImGui::Separator();
+        ImGui::Text("体幹");
+
+        ImGui::Text("自分");
+        ImGui::SameLine();
+        ImGui::ProgressBar(m_playerPosture.Ratio(), ImVec2(-1.0f, 0.0f),
+            m_playerPosture.IsBroken() ? "崩壊" : "");
+
+        ImGui::Text("敵  ");
+        ImGui::SameLine();
+        ImGui::ProgressBar(m_enemyPosture.Ratio(), ImVec2(-1.0f, 0.0f),
+            m_enemyPosture.IsBroken() ? "崩壊" : "");
+
+        ImGui::SliderFloat("弾き1回の体幹", &m_parry.parryPostureDamage, 5.0f, 60.0f);
+        ImGui::SliderFloat("体幹の自然回復", &m_enemyPosture.regenPerFrame, 0.0f, 1.0f);
+        ImGui::SliderInt("回復までの待ち", &m_enemyPosture.regenDelayFrames, 0, 180);
+        ImGui::SliderInt("崩壊の長さ", &m_enemyPosture.breakFrames, 30, 300);
+
+        ImGui::End();
+
+        ImGui::Begin("タイムライン");
+
+        // ---コマ送り---
+        Engine::FixedTimestep& clock = Clock();
+
+        if (!ImGui::GetIO().WantCaptureKeyboard)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_Space, false))
+                clock.SetPaused(!clock.IsPaused());
+
+            // 押しっぱなしで連続して進む
+            if (clock.IsPaused() && ImGui::IsKeyPressed(ImGuiKey_N, true))
+                clock.RequestSingleStep();
+        }
+
+        if (ImGui::Button(clock.IsPaused() ? "再開 (Space)" : "一時停止 (Space)"))
+            clock.SetPaused(!clock.IsPaused());
+
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!clock.IsPaused());
+        if (ImGui::Button("1コマ進める (N)")) clock.RequestSingleStep();
+        ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        ImGui::Text("%llu F", clock.FrameCount());
+        ImGui::Separator();
+
+        Engine::DrawPhaseLegend();
+        ImGui::SliderFloat("拡大", &m_trackZoom, 1.0f, 8.0f, "%.1f px/F");
+        ImGui::Checkbox("弾いたら止める", &m_pauseOnParry);
+
+        if (ImGui::Button("消去")) { m_playerTrack.Clear(); m_enemyTrack.Clear(); }
+
+        ImGui::Text("自分");
+        Engine::DrawRecordedTrack(m_playerTrack, m_trackZoom);
+
+        ImGui::Text("敵  ");
+        Engine::DrawRecordedTrack(m_enemyTrack, m_trackZoom);
+
+        ImGui::Separator();
+        if (m_lastParryOffset >= 0)
+            ImGui::Text("直前の成立: 受付の %d F目", m_lastParryOffset);
+        else
+            ImGui::TextDisabled("直前の成立: まだ無し");
 
         ImGui::End();
     }

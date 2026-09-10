@@ -1,0 +1,21 @@
+# アクション定義
+[EnemySlash]
+clip = Slash
+blendSeconds = 0.1
+startup = 40
+active = 10
+recovery = 30
+cancelFrom = -1
+isParry = 0
+postureDamage = 20
+
+[Deflected]
+clip = Deflected
+blendSeconds = 0.1
+startup = 0
+active = 0
+recovery = 25
+cancelFrom = -1
+isParry = 0
+postureDamage = 20
+

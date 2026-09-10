@@ -1,0 +1,22 @@
+# アクション定義
+[Slash]
+clip = Slash
+blendSeconds = 0.1
+startup = 30
+active = 25
+recovery = 30
+cancelFrom = 20
+isParry = 0
+postureDamage = 20
+cancelTo = Parry, Slash
+
+[Parry]
+clip = Parry
+blendSeconds = 0.1
+startup = 2
+active = 20
+recovery = 15
+cancelFrom = -1
+isParry = 1
+postureDamage = 20
+

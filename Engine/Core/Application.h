@@ -34,9 +34,9 @@ namespace Engine
         // 終了時に1回。DX12 を片付ける前に呼ばれる。
         virtual void OnShutdown() {}
 
-        // ── ゲーム側から使える機能 ──
-
+        // ---ゲーム側から使える機能---
         HWND Window() const { return m_hwnd; }
+        FixedTimestep& Clock() { return m_clock; }
         const FixedTimestep& Clock() const { return m_clock; }
         Renderer& GetRenderer() { return m_renderer; }
 
