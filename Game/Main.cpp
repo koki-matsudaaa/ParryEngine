@@ -49,6 +49,7 @@ class GameApp : public Engine::Application
 
     int  m_parryCount = 0;     // 弾いた回数
     int  m_hitCount = 0;       // 食らった回数
+    int  m_enemyHitCount = 0;  // 敵を斬った回数
 
     float m_zoom = 6.0f;       // タイムラインの横倍率
     float m_trackZoom = 3.0f;        // 履歴の横倍率
@@ -266,7 +267,7 @@ protected:
         m_playerTrack.Record(m_actions);
         m_enemyTrack.Record(m_enemyActions);
 
-        // 判定
+        // 判定　敵からプレイヤー
         switch (m_parry.Resolve(m_enemyActions, m_actions))
         {
         case Engine::ParryResult::Success:
@@ -318,6 +319,48 @@ protected:
             else
                 std::printf("被弾  (自分の体幹 %.0f / %.0f)\n",
                     m_playerPosture.Value(), m_playerPosture.Max());
+            break;
+        }
+        default:
+            break;
+        }
+
+        // 判定　プレイヤーから敵
+        switch (m_parry.Resolve(m_actions, m_enemyActions))
+        {
+        case Engine::ParryResult::Success:
+        {
+            // 敵に弾かれた
+            m_hitStop = m_parry.hitStopOnParry;
+            m_playerPosture.Add(m_parry.parryPostureDamage);
+            std::printf("弾かれた!\n");
+            break;
+        }
+        case Engine::ParryResult::Hit:
+        {
+            m_hitStop = m_parry.hitStopOnHit;
+            m_enemyHitCount++;
+
+            m_playerTrack.MarkEvent(Engine::TimelineEvent::Hit);
+            m_enemyTrack.MarkEvent(Engine::TimelineEvent::Hit);
+
+            float dmg = 20.0f;
+            if (const auto* a = m_actions.CurrentAction())
+                dmg = a->postureDamage;
+
+            if (m_enemyPosture.Add(dmg))
+            {
+                m_enemyActions.Cancel();
+                m_enemy.Play("Break", 0.15f);
+                std::printf("斬った → 敵の体幹崩壊!\n");
+            }
+            else
+            {
+                // 怯み
+                m_enemyActions.StartAction("Deflected");
+                std::printf("斬った  (敵の体幹 %.0f / %.0f)\n",
+                    m_enemyPosture.Value(), m_enemyPosture.Max());
+            }
             break;
         }
         default:
@@ -448,8 +491,12 @@ protected:
         ImGui::SliderInt("被弾時の停止", &m_parry.hitStopOnHit, 0, 30);
 
         ImGui::Separator();
-        ImGui::Text("弾いた %d 回 / 食らった %d 回", m_parryCount, m_hitCount);
-        if (ImGui::Button("記録をリセット")) { m_parryCount = 0; m_hitCount = 0; }
+        ImGui::Text("弾いた %d / 食らった %d / 斬った %d",
+            m_parryCount, m_hitCount, m_enemyHitCount);
+        if (ImGui::Button("記録をリセット"))
+        {
+            m_parryCount = 0; m_hitCount = 0; m_enemyHitCount = 0;
+        }
 
         ImGui::Separator();
         ImGui::Text("体幹");
