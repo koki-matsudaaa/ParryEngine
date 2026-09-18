@@ -9,6 +9,56 @@ cancelFrom = -1
 isParry = 0
 postureDamage = 20
 unblockable = 0
+aiWeight = 3
+
+[EnemyQuick]
+clip = Slash
+blendSeconds = 0.05
+startup = 18
+active = 6
+recovery = 35
+cancelFrom = -1
+isParry = 0
+postureDamage = 15
+unblockable = 0
+aiWeight = 2
+
+[EnemyCombo1]
+clip = Slash
+blendSeconds = 0.1
+startup = 30
+active = 6
+recovery = 4
+cancelFrom = -1
+isParry = 0
+postureDamage = 15
+unblockable = 0
+aiWeight = 2
+nextAction = EnemyCombo2
+
+[EnemyCombo2]
+clip = Slash
+blendSeconds = 0.05
+startup = 14
+active = 6
+recovery = 40
+cancelFrom = -1
+isParry = 0
+postureDamage = 20
+unblockable = 0
+aiWeight = 0
+
+[EnemyDanger]
+clip = Slash
+blendSeconds = 0.1
+startup = 55
+active = 10
+recovery = 45
+cancelFrom = -1
+isParry = 0
+postureDamage = 40
+unblockable = 1
+aiWeight = 1
 
 [Deflected]
 clip = Deflected
@@ -20,4 +70,16 @@ cancelFrom = -1
 isParry = 0
 postureDamage = 20
 unblockable = 0
+aiWeight = 0
 
+[Flinch]
+clip = Deflected
+blendSeconds = 0.05
+startup = 0
+active = 0
+recovery = 15
+cancelFrom = -1
+isParry = 0
+postureDamage = 20
+unblockable = 0
+aiWeight = 0

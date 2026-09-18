@@ -50,6 +50,9 @@ namespace Engine
         // 弾き不可の攻撃
         bool unblockable = false;
 
+        // 敵攻撃の選択の重み
+        int aiWeight = 0;
+
         int TotalFrames() const { return startup + active + recovery; }
     };
 }

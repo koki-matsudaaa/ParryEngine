@@ -40,7 +40,7 @@ namespace Engine
         // 対応するアニメへ切り替える。
         const ActionData& a = m_actions[m_current];
         if (m_animator && !a.clipName.empty())
-            m_animator->Play(a.clipName, a.blendSeconds);
+            m_animator->Play(a.clipName, a.blendSeconds, true);
 
         return true;
     }

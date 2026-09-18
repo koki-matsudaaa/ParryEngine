@@ -9,6 +9,7 @@
 #include "Engine/Tools/Timeline.h"
 #include "Engine/Tools/TimelineRecorder.h"
 #include "Engine/Tools/ActionEditor.h"
+#include "Engine/Combat/AttackSelect.h"
 
 #include "imgui.h"
 
@@ -38,6 +39,7 @@ class GameApp : public Engine::Application
     Engine::FbxModel m_enemy;
     Engine::ActionStateMachine m_enemyActions;
     Engine::Posture m_enemyPosture;
+    Engine::AttackSelect m_enemyAttacks;
     Engine::TimelineRecorder m_playerTrack;
     Engine::TimelineRecorder m_enemyTrack;
 
@@ -162,6 +164,7 @@ private:
         enemySlash.startup = 40;   // 見てから反応できる長さ
         enemySlash.active = 10;
         enemySlash.recovery = 30;
+        enemySlash.aiWeight = 1;
         m_enemyActions.AddAction(enemySlash);
 
         // 弾かれた方
@@ -253,7 +256,9 @@ protected:
         if (!m_enemyPosture.IsBroken()
             && m_enemyActions.IsIdle() && --m_enemyTimer <= 0)
         {
-            m_enemyActions.StartAction("EnemySlash");
+            // 重みに応じて攻撃を選ぶ
+            const std::string next = m_enemyAttacks.Pick(m_enemyActions.Actions());
+            if (!next.empty()) m_enemyActions.StartAction(next);
             m_enemyTimer = m_enemyInterval;
         }
 
@@ -358,7 +363,7 @@ protected:
             else
             {
                 // 怯み
-                m_enemyActions.StartAction("Deflected");
+                m_enemyActions.StartAction("Flinch");
                 std::printf("斬った  (敵の体幹 %.0f / %.0f)\n",
                     m_enemyPosture.Value(), m_enemyPosture.Max());
             }
@@ -373,6 +378,7 @@ protected:
             m_character.Play("Idle", 0.2f);
         if (m_enemyActions.IsIdle() && m_enemy.CurrentClipName() != "Idle")
             m_enemy.Play("Idle", 0.2f);
+
         // 崩壊中は待機に戻さない
         if (!m_enemyPosture.IsBroken()
             && m_enemyActions.IsIdle()
