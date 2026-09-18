@@ -29,12 +29,12 @@ namespace Engine
         BuildPose();
     }
 
-    bool Animator::Play(const std::string& name, float blendSeconds)
+    bool Animator::Play(const std::string& name, float blendSeconds, bool restart)
     {
         auto it = m_clipIndexByName.find(name);
         if (it == m_clipIndexByName.end()) return false;
 
-        if (m_currentClip == it->second) return true;   // 既に再生中
+        if (!restart && m_currentClip == it->second) return true;   // 既に再生中
 
         // 今のクリップを「切り替え元」として取っておき、そこから移り変わる。
         if (blendSeconds > 0.0f && m_currentClip >= 0)

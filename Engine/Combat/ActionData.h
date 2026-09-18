@@ -33,7 +33,7 @@ namespace Engine
         int active = 0;     // 判定が出ている
         int recovery = 0;   // 硬直
 
-        // キャンセルを受け付け始めるフレーム。-1 ならキャンセル不可。
+        // キャンセルを受け付け始めるフレーム
         int cancelFrom = -1;
 
         bool isParry = false;
@@ -41,8 +41,17 @@ namespace Engine
         // 体幹削り量
         float postureDamage = 20.0f;
 
-        // キャンセルで移れるアクション名
+        // キャンセルで移れるアクション
         std::vector<std::string> cancelTo;
+
+        // 終了時に自動で繋ぐアクション
+        std::string nextAction;
+
+        // 弾き不可の攻撃
+        bool unblockable = false;
+
+        // 敵攻撃の選択の重み
+        int aiWeight = 0;
 
         int TotalFrames() const { return startup + active + recovery; }
     };

@@ -11,23 +11,20 @@ namespace Engine
     class ActionStateMachine
     {
     public:
-        // アニメの再生先。アクション開始時にクリップを切り替える。
+        // アニメの再生先
         void SetAnimator(Animator* animator) { m_animator = animator; }
 
-        // アクションを登録する。同名があれば差し替える。
+        // アクションを登録
         void AddAction(const ActionData& action);
 
-        // アクションを開始する。登録が無ければ false。
-        // 割り込んでよいかの判断は呼び出し側が行う (CanCancel を見る)。
+        // アクションを開始
         bool StartAction(const std::string& name);
 
-        // 1フレーム進める。毎ステップ1回だけ呼ぶ。
+        // 1フレーム進める
         void Step();
 
-        // 進行を打ち切って何もしていない状態に戻す。
         void Cancel();
 
-        // 登録済みのアクションを全部消す
         void Clear();
 
         ActionPhase Phase() const;
@@ -45,7 +42,7 @@ namespace Engine
         bool CanCancelInto(const std::string& next) const;
 
         // このフレームでパリィに入った
-        bool StartParry() const;
+        bool JustBecameActive() const;
 
         // 今パリィ受付中か
         bool OnParry() const;
