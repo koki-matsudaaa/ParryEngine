@@ -45,7 +45,7 @@ namespace Engine
         bool CanCancelInto(const std::string& next) const;
 
         // このフレームでパリィに入った
-        bool StartParry() const;
+        bool JustBecameActive() const;
 
         // 今パリィ受付中か
         bool OnParry() const;

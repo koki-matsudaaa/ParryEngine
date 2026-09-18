@@ -8,6 +8,7 @@ recovery = 30
 cancelFrom = -1
 isParry = 0
 postureDamage = 20
+unblockable = 0
 
 [Deflected]
 clip = Deflected
@@ -18,4 +19,5 @@ recovery = 25
 cancelFrom = -1
 isParry = 0
 postureDamage = 20
+unblockable = 0
 

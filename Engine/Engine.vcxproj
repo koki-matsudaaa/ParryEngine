@@ -69,6 +69,7 @@
     <ClInclude Include="Graphics\PipelineCache.h" />
     <ClInclude Include="Graphics\Renderer.h" />
     <ClInclude Include="Input\InputBuffer.h" />
+    <ClInclude Include="Tools\ActionEditor.h" />
     <ClInclude Include="Tools\ImguiLayer.h" />
     <ClInclude Include="Tools\Timeline.h" />
     <ClInclude Include="Tools\TimelineRecorder.h" />
@@ -95,6 +96,7 @@
     <ClCompile Include="Graphics\PipelineCache.cpp" />
     <ClCompile Include="Graphics\Renderer.cpp" />
     <ClCompile Include="Input\InputBuffer.cpp" />
+    <ClCompile Include="Tools\ActionEditor.cpp" />
     <ClCompile Include="Tools\ImguiLayer.cpp" />
     <ClCompile Include="Tools\Timeline.cpp" />
     <ClCompile Include="Tools\TimelineRecorder.cpp" />

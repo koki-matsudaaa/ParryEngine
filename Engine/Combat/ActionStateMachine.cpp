@@ -35,6 +35,7 @@ namespace Engine
 
         m_current = it->second;
         m_frame = 0;
+        m_prevPhase = ActionPhase::None;    //  リセット
 
         // 対応するアニメへ切り替える。
         const ActionData& a = m_actions[m_current];
@@ -59,8 +60,11 @@ namespace Engine
         // 全フレームを消化したら終了。
         if (m_frame >= m_actions[m_current].TotalFrames())
         {
+            const std::string next = m_actions[m_current].nextAction;
             m_current = -1;
             m_frame = 0;
+
+            if (!next.empty()) StartAction(next);
         }
     }
 
@@ -113,14 +117,14 @@ namespace Engine
         // キャンセル可能区間に入っているか。
         if (a.cancelFrom < 0 || m_frame < a.cancelFrom) return false;
 
-        // 移り先の制限。空なら何にでも移れる。
+        // 移り先の制限
         if (a.cancelTo.empty()) return true;
 
         return std::find(a.cancelTo.begin(), a.cancelTo.end(), next)
             != a.cancelTo.end();
     }
 
-    bool ActionStateMachine::StartParry() const
+    bool ActionStateMachine::JustBecameActive() const
     {
         return Phase() == ActionPhase::Active
             && m_prevPhase != ActionPhase::Active;

@@ -9,6 +9,7 @@ namespace
     const ImVec4 kActive = ImVec4(0.75f, 0.25f, 0.25f, 1.0f);   // 判定 (赤)
     const ImVec4 kRecovery = ImVec4(0.25f, 0.50f, 0.75f, 1.0f); // 硬直 (青)
     const ImVec4 kParry = ImVec4(0.25f, 0.75f, 0.50f, 1.0f);    // パリィ受付 (緑)
+    const ImVec4 kUnblock = ImVec4(0.85f, 0.45f, 0.15f, 1.0f);  // 弾けない (橙)
 
     constexpr float kBarHeight = 18.0f;
     constexpr float kRulerHeight = 14.0f;
@@ -57,11 +58,13 @@ namespace Engine
     {
         ImDrawList* dl = ImGui::GetWindowDrawList();
         const ImVec2 origin = ImGui::GetCursorScreenPos();
+        const ImVec4& activeColor = action.unblockable ? kUnblock
+            : action.isParry ? kParry
+            : kActive;
 
         float x = 0.0f;
         x += FillSegment(dl, origin, x, action.startup, ppf, kStartup);
-        x += FillSegment(dl, origin, x, action.active, ppf,
-            action.isParry ? kParry : kActive);
+        x += FillSegment(dl, origin, x, action.active, ppf, activeColor);
         x += FillSegment(dl, origin, x, action.recovery, ppf, kRecovery);
 
         // ここから先はキャンセルで割り込める
@@ -91,6 +94,7 @@ namespace Engine
         ImGui::TextColored(kActive, "判定"); ImGui::SameLine();
         ImGui::TextColored(kRecovery, "硬直"); ImGui::SameLine();
         ImGui::TextColored(kParry, "受付"); ImGui::SameLine();
+        ImGui::TextColored(kUnblock, "危"); ImGui::SameLine();
         ImGui::TextDisabled("| 黒線=キャンセル可 白線=再生位置");
     }
     

@@ -8,15 +8,17 @@ recovery = 30
 cancelFrom = 20
 isParry = 0
 postureDamage = 20
+unblockable = 0
 cancelTo = Parry, Slash
 
 [Parry]
 clip = Parry
 blendSeconds = 0.1
 startup = 2
-active = 20
+active = 10
 recovery = 15
 cancelFrom = -1
 isParry = 1
 postureDamage = 20
+unblockable = 0
 

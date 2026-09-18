@@ -55,6 +55,9 @@ namespace Engine
             f << "cancelFrom = " << a.cancelFrom << "\n";
             f << "isParry = " << (a.isParry ? 1 : 0) << "\n";
             f << "postureDamage = " << a.postureDamage << "\n";
+            f << "unblockable = " << (a.unblockable ? 1 : 0) << "\n";
+            if (!a.nextAction.empty())
+                f << "nextAction = " << a.nextAction << "\n";
 
             if (!a.cancelTo.empty())
             {
@@ -115,6 +118,8 @@ namespace Engine
                 else if (key == "isParry")       a.isParry = (std::stoi(val) != 0);
                 else if (key == "postureDamage") a.postureDamage = std::stof(val);
                 else if (key == "cancelTo")      a.cancelTo = SplitComma(val);
+                else if (key == "unblockable")   a.unblockable = (std::stoi(val) != 0);
+                else if (key == "nextAction")    a.nextAction = val;
             }
             catch (...)
             {
