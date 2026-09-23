@@ -15,7 +15,8 @@ namespace Engine
     public:
         // 判定が発生したフレームだけ
         ParryResult Resolve(const ActionStateMachine& attacker,
-            const ActionStateMachine& defender) const;
+            const ActionStateMachine& defender,
+            float distance) const;
 
         // 調整パラメータ
         int hitStopOnParry = 10;

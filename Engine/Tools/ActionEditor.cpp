@@ -69,6 +69,7 @@ namespace Engine
                 ImGui::SliderInt("キャンセル", &a.cancelFrom, -1, 90);
                 ImGui::SliderFloat("体幹削り", &a.postureDamage, 0.0f, 100.0f, "%.0f");
                 ImGui::SliderInt("AIの重み", &a.aiWeight, 0, 10);
+                ImGui::SliderFloat("届く距離", &a.range, 0.5f, 5.0f, "%.1f m");
 
                 ImGui::Checkbox("パリィ技", &a.isParry);
                 ImGui::SameLine();

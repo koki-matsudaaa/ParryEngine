@@ -57,6 +57,7 @@ namespace Engine
             f << "postureDamage = " << a.postureDamage << "\n";
             f << "unblockable = " << (a.unblockable ? 1 : 0) << "\n";
             f << "aiWeight = " << a.aiWeight << "\n";
+            f << "range = " << a.range << "\n";
             if (!a.nextAction.empty())
                 f << "nextAction = " << a.nextAction << "\n";
 
@@ -122,6 +123,7 @@ namespace Engine
                 else if (key == "unblockable")   a.unblockable = (std::stoi(val) != 0);
                 else if (key == "aiWeight")      a.aiWeight = std::stoi(val);
                 else if (key == "nextAction")    a.nextAction = val;
+                else if (key == "range")         a.range = std::stof(val);
             }
             catch (...)
             {

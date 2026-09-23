@@ -3,7 +3,8 @@
 namespace Engine
 {
     ParryResult ParrySystem::Resolve(const ActionStateMachine& attacker,
-        const ActionStateMachine& defender) const
+        const ActionStateMachine& defender,
+        float distance) const
     {
         // 判定が出た最初の1フレームだけ
         if (!attacker.JustBecameActive()) return ParryResult::None;
@@ -12,6 +13,9 @@ namespace Engine
 
         // パリィ技の判定
         if (!a || a->isParry) return ParryResult::None;
+
+        // 間合いの外なら空振り
+        if (distance > a->range) return ParryResult::None;
 
         // はじけない攻撃の貫通
         if (a->unblockable) return ParryResult::Hit;

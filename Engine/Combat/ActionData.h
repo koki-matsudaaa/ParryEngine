@@ -53,6 +53,9 @@ namespace Engine
         // 敵攻撃の選択の重み
         int aiWeight = 0;
 
+        // 攻撃が届く距離
+        float range = 2.0f;
+
         int TotalFrames() const { return startup + active + recovery; }
     };
 }

@@ -72,6 +72,11 @@ class GameApp : public Engine::Application
     bool  m_prevLockKey = false;
     float m_lockCameraSpeed = 8.0f;  // カメラの振り向き速度
 
+    float m_enemySpeed = 2.0f;       // 敵の速さ
+    float m_enemyKeepRange = 1.8f;   // 敵の攻撃範囲
+    float m_enemyChaseRange = 2.4f;  // 追跡開始する距離
+    bool  m_enemyChasing = false;
+
 protected:
     bool OnStart() override
     {
@@ -125,10 +130,13 @@ private:
             return false;
         }
 
-        // モーションだけを追加で読む。メッシュは重複しない。
+        // モーションだけを追加で読む
         m_character.LoadClip("Run", "Assets/Model/Bot_Run.fbx");
         m_character.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false);
         m_character.LoadClip("Parry", "Assets/Model/Bot_Block.fbx", false);
+        m_character.LoadClip("StrafeL", "Assets/Model/Bot_StrafeL.fbx");
+        m_character.LoadClip("StrafeR", "Assets/Model/Bot_StrafeR.fbx");
+        m_character.LoadClip("RunBack", "Assets/Model/Bot_RunBack.fbx");
 
         m_character.Play("Idle");
         std::printf("クリップ %zu 本 / ボーン %zu 本\n",
@@ -143,6 +151,7 @@ private:
         m_enemy.LoadClip("Slash", "Assets/Model/Bot_Slash.fbx", false);
         m_enemy.LoadClip("Deflected", "Assets/Model/Bot_Deflected.fbx", false);
         m_enemy.LoadClip("Break", "Assets/Model/Bot_Break.fbx", false);
+        m_enemy.LoadClip("Run", "Assets/Model/Bot_Run.fbx");
         m_enemy.Play("Idle");
 
         return true;
@@ -240,6 +249,14 @@ private:
         return std::atan2(dx, dz);
     }
 
+    // プレイヤーと敵の距離
+    float DistanceToEnemy() const
+    {
+        const float dx = m_enemyTf.position.x - m_playerTf.position.x;
+        const float dz = m_enemyTf.position.z - m_playerTf.position.z;
+        return std::sqrt(dx * dx + dz * dz);
+    }
+
     // 移動
     void UpdateMovement(float dt)
     {
@@ -283,8 +300,59 @@ private:
         if (!m_lockOn)
             m_playerTf.TurnTowards(std::atan2(mx, mz), m_turnSpeed * dt);
 
-        if (m_character.CurrentClipName() != "Run")
-            m_character.Play("Run", 0.15f);
+        // ロック中　正面からどれだけずれているかで判断
+        const char* clip = "Run";
+        if (m_lockOn)
+        {
+            const float rel = Engine::AngleDiff(m_playerTf.yaw, std::atan2(mx, mz));
+            if (rel > XM_PIDIV4 * 3 || rel < -XM_PIDIV4 * 3) 
+                clip = "RunBack";
+            else if (rel > XM_PIDIV4) 
+                clip = "StrafeR";
+            else if (rel < -XM_PIDIV4) 
+                clip = "StrafeL";
+        }
+
+        if (m_character.CurrentClipName() != clip)
+            m_character.Play(clip, 0.15f);
+    }
+
+    // 敵の行動
+    void UpdateEnemy(float dt)
+    {
+        if (m_enemyPosture.IsBroken()) return;   // 崩壊中は動かない
+        if (!m_enemyActions.IsIdle())   return;  // 何かしている最中は動かない
+
+        const float dist = DistanceToEnemy();
+
+        // ガクガク防ぎ　仮
+        if (dist > m_enemyChaseRange)       m_enemyChasing = true;
+        else if (dist <= m_enemyKeepRange)  m_enemyChasing = false;
+
+        if (m_enemyChasing)
+        {
+            // 間合いの外
+            const XMFLOAT3 f = m_enemyTf.Forward();
+            m_enemyTf.position.x += f.x * m_enemySpeed * dt;
+            m_enemyTf.position.z += f.z * m_enemySpeed * dt;
+
+            if (m_enemy.CurrentClipName() != "Run")
+                m_enemy.Play("Run", 0.15f);
+
+            // 待ち時間を戻す
+            m_enemyTimer = m_enemyInterval;
+            return;
+        }
+
+        if (m_enemy.CurrentClipName() != "Idle")
+            m_enemy.Play("Idle", 0.2f);
+
+        if (--m_enemyTimer <= 0)
+        {
+            const std::string next = m_enemyAttacks.Pick(m_enemyActions.Actions());
+            if (!next.empty()) m_enemyActions.StartAction(next);
+            m_enemyTimer = m_enemyInterval;
+        }
     }
 
 protected:
@@ -348,20 +416,12 @@ protected:
         // 移動
         UpdateMovement(dt);
 
-        // 敵の向き　プレイヤーへ
-        const float dx = m_playerTf.position.x - m_enemyTf.position.x;
-        const float dz = m_playerTf.position.z - m_enemyTf.position.z;
-        m_enemyTf.yaw = std::atan2(dx, dz);
+        // 敵はいつもプレイヤーの方を向く
+        m_enemyTf.yaw = std::atan2(
+            m_playerTf.position.x - m_enemyTf.position.x,
+            m_playerTf.position.z - m_enemyTf.position.z);
 
-        // 敵
-        if (!m_enemyPosture.IsBroken()
-            && m_enemyActions.IsIdle() && --m_enemyTimer <= 0)
-        {
-            // 重みに応じて攻撃を選ぶ
-            const std::string next = m_enemyAttacks.Pick(m_enemyActions.Actions());
-            if (!next.empty()) m_enemyActions.StartAction(next);
-            m_enemyTimer = m_enemyInterval;
-        }
+        UpdateEnemy(dt);
 
         // 1フレーム進める
         m_actions.Step();
@@ -374,8 +434,10 @@ protected:
         m_playerTrack.Record(m_actions);
         m_enemyTrack.Record(m_enemyActions);
 
+        const float dist = DistanceToEnemy();
+
         // 判定　敵からプレイヤー
-        switch (m_parry.Resolve(m_enemyActions, m_actions))
+        switch (m_parry.Resolve(m_enemyActions, m_actions, dist))
         {
         case Engine::ParryResult::Success:
         {
@@ -433,7 +495,7 @@ protected:
         }
 
         // 判定　プレイヤーから敵
-        switch (m_parry.Resolve(m_actions, m_enemyActions))
+        switch (m_parry.Resolve(m_actions, m_enemyActions, dist))
         {
         case Engine::ParryResult::Success:
         {
@@ -474,17 +536,6 @@ protected:
             break;
         }
 
-        // 待機へ戻す
-        if (m_enemyActions.IsIdle() && m_enemy.CurrentClipName() != "Idle")
-            m_enemy.Play("Idle", 0.2f);
-
-        // 崩壊中は待機に戻さない
-        if (!m_enemyPosture.IsBroken()
-            && m_enemyActions.IsIdle()
-            && m_enemy.CurrentClipName() != "Idle")
-        {
-            m_enemy.Play("Idle", 0.3f);
-        }
     }
 
     void OnRender(float alpha) override
@@ -552,6 +603,11 @@ protected:
         Engine::DrawActionEditor(m_enemyActions, m_zoom);
 
         ImGui::SliderInt("敵の攻撃間隔", &m_enemyInterval, 30, 240);
+        ImGui::Text("敵との距離 %.2f m", DistanceToEnemy());
+        ImGui::SliderFloat("敵の歩く速さ", &m_enemySpeed, 0.5f, 6.0f);
+        ImGui::SliderFloat("敵が詰める距離", &m_enemyKeepRange, 0.5f, 5.0f);
+        ImGui::SliderFloat("敵が追い始める距離", &m_enemyChaseRange, 0.5f, 6.0f);
+
         ImGui::SliderInt("弾き時の停止", &m_parry.hitStopOnParry, 0, 30);
         ImGui::SliderInt("被弾時の停止", &m_parry.hitStopOnHit, 0, 30);
 
