@@ -64,6 +64,7 @@
     <ClInclude Include="Core\Dx12Context.h" />
     <ClInclude Include="Core\FixedTimestep.h" />
     <ClInclude Include="Core\pch.h" />
+    <ClInclude Include="Core\Transform.h" />
     <ClInclude Include="Graphics\Camera.h" />
     <ClInclude Include="Graphics\FbxModel.h" />
     <ClInclude Include="Graphics\IRenderable.h" />

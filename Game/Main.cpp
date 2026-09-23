@@ -10,12 +10,14 @@
 #include "Engine/Tools/TimelineRecorder.h"
 #include "Engine/Tools/ActionEditor.h"
 #include "Engine/Combat/AttackSelect.h"
+#include "Engine/Core/Transform.h"
 
 #include "imgui.h"
 
 #include <cstdio>
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 using namespace DirectX;
 using Engine::ActionPhase;
@@ -24,17 +26,19 @@ class GameApp : public Engine::Application
 {
     // 1 unit = 1 m
     static constexpr float kCharacterScale = 0.01f; // 180  → 1.8m
-    static constexpr float kTerrainScale = 20.0f;   //   2  → 40m 四方
+    static constexpr float kTerrainScale = 1.0f;
     static constexpr const char* kPlayerActionFile = "Assets/Data/PlayerActions.txt";
     static constexpr const char* kEnemyActionFile = "Assets/Data/EnemyActions.txt";
 
     Engine::FbxModel m_terrain;
+    Engine::FbxModel m_sky;
     Engine::FbxModel m_character;
     Engine::Camera m_camera;
     Engine::ActionStateMachine m_actions;
     Engine::InputBuffer m_input;
     Engine::ParrySystem m_parry;
     Engine::Posture m_playerPosture;
+    Engine::Transform m_playerTf;
 
     Engine::FbxModel m_enemy;
     Engine::ActionStateMachine m_enemyActions;
@@ -42,6 +46,7 @@ class GameApp : public Engine::Application
     Engine::AttackSelect m_enemyAttacks;
     Engine::TimelineRecorder m_playerTrack;
     Engine::TimelineRecorder m_enemyTrack;
+    Engine::Transform m_enemyTf;
 
     bool m_prevAttack = false;
     bool m_prevParry = false;
@@ -59,6 +64,14 @@ class GameApp : public Engine::Application
     bool  m_pauseOnParry = false;    // 弾いた瞬間に記録を止める
     int   m_lastParryOffset = -1;    // 受付の何F目で成立したか
 
+    // 位置と向き
+    float m_moveSpeed = 3.5f;       // 歩く速さ
+    float m_turnSpeed = 12.0f;      // 振り向く速さ
+
+    bool  m_lockOn = false;          // ロックオン中か
+    bool  m_prevLockKey = false;
+    float m_lockCameraSpeed = 8.0f;  // カメラの振り向き速度
+
 protected:
     bool OnStart() override
     {
@@ -69,6 +82,8 @@ protected:
         SetupCamera();
         SetupActions();
         LoadActionFiles();
+
+        m_enemyTf.position = XMFLOAT3(0.0f, 0.0f, 1.5f);
 
         // 履歴をためる
         m_playerTrack.SetCapacity(240);
@@ -81,13 +96,23 @@ protected:
 private:
     bool LoadTerrain()
     {
+        m_terrain.SetMeshFilter("Plane");
         if (!m_terrain.Load("Assets/Model/SnowTerrain.fbx",
             "Assets/Model/grass_texture_01.png"))
         {
-            std::printf("地形の読み込みに失敗しました\n");
+            std::printf("地面の読み込みに失敗しました\n");
             return false;
         }
-        m_terrain.SetStaticPipeline(true);   // ボーンが無いので Static で描く
+        m_terrain.SetStaticPipeline(true);
+
+        m_sky.SetMeshFilter("Sphere");
+        if (!m_sky.Load("Assets/Model/SnowTerrain.fbx",
+            "Assets/Model/blue_sky.png"))
+        {
+            std::printf("空の読み込みに失敗しました\n");
+            return false;
+        }
+        m_sky.SetStaticPipeline(true);
         return true;
     }
 
@@ -207,6 +232,61 @@ private:
         std::printf("アクションを保存しました\n");
     }
 
+    // プレイヤーから見た敵の方向
+    float YawToEnemy() const
+    {
+        const float dx = m_enemyTf.position.x - m_playerTf.position.x;
+        const float dz = m_enemyTf.position.z - m_playerTf.position.z;
+        return std::atan2(dx, dz);
+    }
+
+    // 移動
+    void UpdateMovement(float dt)
+    {
+        if (!m_actions.IsIdle()) return;
+
+        // ロック中は、止まっていても敵の方を向き続ける
+        if (m_lockOn)
+            m_playerTf.TurnTowards(YawToEnemy(), m_turnSpeed * dt);
+
+        float ix = 0.0f;   // 左右
+        float iz = 0.0f;   // 前後
+        if (GetAsyncKeyState('W') & 0x8000) iz += 1.0f;
+        if (GetAsyncKeyState('S') & 0x8000) iz -= 1.0f;
+        if (GetAsyncKeyState('D') & 0x8000) ix += 1.0f;
+        if (GetAsyncKeyState('A') & 0x8000) ix -= 1.0f;
+
+        if (ix == 0.0f && iz == 0.0f)
+        {
+            if (m_character.CurrentClipName() != "Idle")
+                m_character.Play("Idle", 0.2f);
+            return;
+        }
+
+        // カメラの向きから「前」と「右」を作る
+        const float cy = m_camera.GetYaw();
+        const float fx = std::sin(cy), fz = std::cos(cy);    // 前
+        const float rx = std::cos(cy), rz = -std::sin(cy);   // 右
+
+        float mx = fx * iz + rx * ix;
+        float mz = fz * iz + rz * ix;
+
+        // 斜めだけ速くならないよう、長さを 1 にそろえる
+        const float len = std::sqrt(mx * mx + mz * mz);
+        mx /= len;
+        mz /= len;
+
+        m_playerTf.position.x += mx * m_moveSpeed * dt;
+        m_playerTf.position.z += mz * m_moveSpeed * dt;
+
+        // ロックしていないときは、進む方向を向く
+        if (!m_lockOn)
+            m_playerTf.TurnTowards(std::atan2(mx, mz), m_turnSpeed * dt);
+
+        if (m_character.CurrentClipName() != "Run")
+            m_character.Play("Run", 0.15f);
+    }
+
 protected:
     void OnUpdate(float dt) override
     {
@@ -215,14 +295,21 @@ protected:
 
         // 矢印キーでカメラを回す
         const float rotSpeed = 2.0f;   // ラジアン/秒
-        if (GetAsyncKeyState(VK_LEFT) & 0x8000) m_camera.AddYaw(-rotSpeed * dt);
-        if (GetAsyncKeyState(VK_RIGHT) & 0x8000) m_camera.AddYaw(+rotSpeed * dt);
-        if (GetAsyncKeyState(VK_UP) & 0x8000) m_camera.AddPitch(-rotSpeed * dt);
+        if (!m_lockOn)
+        {
+            if (GetAsyncKeyState(VK_LEFT) & 0x8000)  m_camera.AddYaw(-rotSpeed * dt);
+            if (GetAsyncKeyState(VK_RIGHT) & 0x8000) m_camera.AddYaw(+rotSpeed * dt);
+        }
+        if (GetAsyncKeyState(VK_UP) & 0x8000)   m_camera.AddPitch(-rotSpeed * dt);
         if (GetAsyncKeyState(VK_DOWN) & 0x8000) m_camera.AddPitch(+rotSpeed * dt);
 
-        // アクション（硬直）が終わったら待機へ戻す
-        if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
-            m_character.Play("Idle", 0.2f);
+        // ロック中
+        if (m_lockOn)
+        {
+            const float diff = Engine::AngleDiff(m_camera.GetYaw(), YawToEnemy());
+            const float rate = std::min(1.0f, m_lockCameraSpeed * dt);
+            m_camera.AddYaw(diff * rate);
+        }
 
         // 入力
         const bool attackHeld = (GetAsyncKeyState('Z') & 0x8000) != 0;
@@ -232,6 +319,10 @@ protected:
         const bool parryHeld = (GetAsyncKeyState('X') & 0x8000) != 0;
         if (parryHeld && !m_prevParry) m_input.Push("Parry");
         m_prevParry = parryHeld;
+
+        const bool lockHeld = (GetAsyncKeyState('Q') & 0x8000) != 0;
+        if (lockHeld && !m_prevLockKey) m_lockOn = !m_lockOn;
+        m_prevLockKey = lockHeld;
 
         // ヒットストップ
         if (m_hitStop > 0)
@@ -245,12 +336,22 @@ protected:
         {
             m_input.Consume("Parry");
             m_actions.StartAction("Parry");
+            if (m_lockOn) m_playerTf.yaw = YawToEnemy();
         }
         else if (m_input.Has("Attack") && m_actions.CanCancelInto("Slash"))
         {
             m_input.Consume("Attack");
             m_actions.StartAction("Slash");
+            if (m_lockOn) m_playerTf.yaw = YawToEnemy();
         }
+
+        // 移動
+        UpdateMovement(dt);
+
+        // 敵の向き　プレイヤーへ
+        const float dx = m_playerTf.position.x - m_enemyTf.position.x;
+        const float dz = m_playerTf.position.z - m_enemyTf.position.z;
+        m_enemyTf.yaw = std::atan2(dx, dz);
 
         // 敵
         if (!m_enemyPosture.IsBroken()
@@ -374,8 +475,6 @@ protected:
         }
 
         // 待機へ戻す
-        if (m_actions.IsIdle() && m_character.CurrentClipName() != "Idle")
-            m_character.Play("Idle", 0.2f);
         if (m_enemyActions.IsIdle() && m_enemy.CurrentClipName() != "Idle")
             m_enemy.Play("Idle", 0.2f);
 
@@ -392,20 +491,20 @@ protected:
     {
         (void)alpha;
 
+        // カメラ
+        m_camera.SetTarget(m_playerTf.position);
         GetRenderer().SetCamera(m_camera.View(), m_camera.Projection(), m_camera.Eye());
 
-        //GetRenderer().DrawModel(&m_terrain,
-        //    XMMatrixScaling(kTerrainScale, kTerrainScale, kTerrainScale));
+        // 空
+        GetRenderer().DrawModel(&m_sky,
+            XMMatrixScaling(kTerrainScale, kTerrainScale, kTerrainScale));
 
-        // Player
-        GetRenderer().DrawModel(&m_character,
-            XMMatrixScaling(kCharacterScale, kCharacterScale, kCharacterScale));
+        // 地面
+        GetRenderer().DrawModel(&m_terrain,
+            XMMatrixScaling(kTerrainScale, kTerrainScale, kTerrainScale));
 
-        // 敵。
-        GetRenderer().DrawModel(&m_enemy,
-            XMMatrixScaling(kCharacterScale, kCharacterScale, kCharacterScale)
-            * XMMatrixRotationY(XM_PI)
-            * XMMatrixTranslation(0.0f, 0.0f, 1.5f));
+        GetRenderer().DrawModel(&m_character, m_playerTf.World(kCharacterScale));
+        GetRenderer().DrawModel(&m_enemy, m_enemyTf.World(kCharacterScale));
     }
 
     void OnGui() override
@@ -432,6 +531,11 @@ protected:
         int window = m_input.Window();
         if (ImGui::SliderInt("先行入力の受付", &window, 0, 30))
             m_input.SetWindow(window);
+
+        ImGui::SliderFloat("歩く速さ", &m_moveSpeed, 1.0f, 8.0f);
+        ImGui::SliderFloat("振り向く速さ", &m_turnSpeed, 2.0f, 30.0f);
+        ImGui::Checkbox("ロックオン (Q)", &m_lockOn);
+        ImGui::SliderFloat("ロック時のカメラ", &m_lockCameraSpeed, 1.0f, 20.0f);
 
         ImGui::Separator();
 

@@ -16,9 +16,7 @@ namespace Engine
         }
     }
 
-    // ──────────────────────────────────────────
-    // FbxManager の共有 (SDK全体で1つ)
-    // ──────────────────────────────────────────
+    // --- FbxManager の共有 (SDK全体で1つ) ---
     FbxManager* FbxModel::GetSharedManager()
     {
         // 関数内 static。初回呼び出し時に1度だけ生成され、以降同じものを返す。
@@ -33,9 +31,7 @@ namespace Engine
         return s_manager;
     }
 
-    // ──────────────────────────────────────────
-    // 読み込み本体
-    // ──────────────────────────────────────────
+    // --- 読み込み本体 ---
     bool FbxModel::Load(const std::string& path, const std::string& texturePath,
         const std::string& defaultClipName)
     {
@@ -48,9 +44,7 @@ namespace Engine
         ReadMeshes(scene);
         SetupSkeleton();
 
-        // アニメが入っていればクリップとして登録する。
-        // アニメだけ / メッシュだけ のファイルもあるので、
-        // 片方が欠けていてもここでは失敗にしない。
+        // アニメが入っていればクリップとして登録
         {
             AnimationClip clip;
             clip.name = defaultClipName;
@@ -71,9 +65,7 @@ namespace Engine
     }
 
 
-    // ──────────────────────────────────────────
-    // 1メッシュから頂点(位置)を取り出す
-    // ──────────────────────────────────────────
+    // --- 1メッシュから頂点(位置)を取り出す ---
     void FbxModel::ReadMesh(FbxMesh* mesh)
     {
         FbxVector4* controlPoints = mesh->GetControlPoints();
@@ -95,6 +87,16 @@ namespace Engine
             hasUV = true;
         }
 
+        // 回転・拡大・移動を頂点に反映
+        FbxAMatrix nodeMatrix;     // 何もしなければ単位行列
+        FbxAMatrix nodeRotation;   // 法線用
+        const bool isStatic = (mesh->GetDeformerCount(FbxDeformer::eSkin) == 0);
+        if (isStatic && mesh->GetNode())
+        {
+            nodeMatrix = mesh->GetNode()->EvaluateGlobalTransform();
+            nodeRotation.SetR(nodeMatrix.GetR());
+        }
+
         unsigned int base = static_cast<unsigned int>(m_vertices.size());
 
         for (int i = 0; i < polygonVertexCount; i++)
@@ -103,16 +105,19 @@ namespace Engine
 
             FbxVtx v;
             // 位置
-            v.position.x = static_cast<float>(controlPoints[cpIndex][0]);
-            v.position.y = static_cast<float>(controlPoints[cpIndex][1]);
-            v.position.z = static_cast<float>(controlPoints[cpIndex][2]);
+            const FbxVector4 p = nodeMatrix.MultT(controlPoints[cpIndex]);
+            v.position.x = static_cast<float>(p[0]);
+            v.position.y = static_cast<float>(p[1]);
+            v.position.z = static_cast<float>(p[2]);
 
             // 法線 (ポリゴン頂点の並び i にそのまま対応)
             if (i < normals.Size())
             {
-                v.normal.x = static_cast<float>(normals[i][0]);
-                v.normal.y = static_cast<float>(normals[i][1]);
-                v.normal.z = static_cast<float>(normals[i][2]);
+                // 面の向きも同じだけ回す
+                const FbxVector4 n = nodeRotation.MultT(normals[i]);
+                v.normal.x = static_cast<float>(n[0]);
+                v.normal.y = static_cast<float>(n[1]);
+                v.normal.z = static_cast<float>(n[2]);
             }
             else
             {
@@ -146,9 +151,7 @@ namespace Engine
         }
     }
 
-    // ──────────────────────────────────────────
-    // GPUバッファ構築 (PmdModel と同じ要領)
-    // ──────────────────────────────────────────
+    // --- GPUバッファ構築 ---
     void FbxModel::BuildBuffers()
     {
         // 頂点バッファ
@@ -232,6 +235,11 @@ namespace Engine
         {
             FbxMesh* mesh = scene->GetSrcObject<FbxMesh>(i);
             if (!mesh) continue;
+
+            // 名前の指定があるとき
+            if (!m_meshFilter.empty()
+                && (!mesh->GetNode() || m_meshFilter != mesh->GetNode()->GetName()))
+                continue;
 
             const unsigned int vtxBase = static_cast<unsigned int>(m_vertices.size());
             ReadMesh(mesh);
@@ -325,17 +333,16 @@ namespace Engine
             }
         }
 
-        // 確認用: 読めたボーン数を出力。
+        // 読めたボーン数を出力。
         char buf[64];
         sprintf_s(buf, "Bones read: %zu\n", m_bones.size());
         OutputDebugStringA(buf);
     }
 
-    // スキンウェイトを読む (段2)。頂点ごとに、影響するボーンと重みを集める。
+    // スキンウェイトを読む。頂点ごとに、影響するボーンと重みを集める。
     void FbxModel::ReadSkinWeights(FbxMesh* mesh, unsigned int vertexBase)
     {
-        // 頂点ごとに (ボーン番号, 重み) のリストを一時的に溜める。
-        // vertexBase は、このメッシュの頂点が m_vertices の何番目から始まるか。
+        // 頂点ごとにボーン番号, 重みのリストを一時的に溜める。
         int controlPointCount = mesh->GetControlPointsCount();
         std::vector<std::vector<std::pair<int, float>>> perControlPoint(controlPointCount);
 
@@ -373,8 +380,7 @@ namespace Engine
             }
         }
 
-        // コントロールポイントごとの情報を、実際の頂点 (ポリゴン頂点で展開済み) に移す。
-        // ReadMesh でポリゴン頂点を展開したので、その対応を再現する。
+        // コントロールポイントごとの情報を、実際の頂点に移す。
         int* polygonVertices = mesh->GetPolygonVertices();
         int polygonVertexCount = mesh->GetPolygonVertexCount();
 
@@ -408,7 +414,7 @@ namespace Engine
             }
         }
 
-        // 確認用: 最初の頂点のウェイトを出す
+        // 最初の頂点のウェイトを出す
         if (!m_vertices.empty())
         {
             char buf[128];
@@ -436,9 +442,7 @@ namespace Engine
         const int stackCount = scene->GetSrcObjectCount<FbxAnimStack>();
         if (stackCount == 0) return false;
 
-        // カーブ (実際のキー) を持つスタックを選ぶ。
-        // Mixamo は空の "Take 001" が先頭に入っていることがあり、
-        // それを掴むとどの時刻を評価してもバインドポーズが返る。
+        // 実際のキーを持つスタックを選ぶ。
         FbxAnimStack* stack = nullptr;
         for (int i = 0; i < stackCount; i++)
         {
@@ -468,9 +472,7 @@ namespace Engine
 
         const int frameCount = static_cast<int>(clip.duration * clip.fps) + 1;
 
-        // このシーンのノードを名前で引けるようにする。
-        // Load のときは自分のシーン、LoadClip のときは別ファイルのシーンになる。
-        // どちらもボーン名で引くので、同じ処理で済む。
+        // ノードを名前で引けるようにする。
         std::map<std::string, FbxNode*> nodes;
         CollectNodes(scene->GetRootNode(), nodes);
 
@@ -550,9 +552,7 @@ namespace Engine
         return true;
     }
 
-    // ──────────────────────────────────────────
-    // 描画
-    // ──────────────────────────────────────────
+    // --- 描画 ---
     void FbxModel::Draw(ID3D12GraphicsCommandList* cmdList)
     {
         // テクスチャヒープをセットし、t0 (ルートパラメータ2) に割り当てる。
