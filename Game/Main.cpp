@@ -24,8 +24,7 @@ using Engine::ActionPhase;
 
 class GameApp : public Engine::Application
 {
-    // 1 unit = 1 m
-    static constexpr float kCharacterScale = 0.01f; // 180  → 1.8m
+    static constexpr float kCharacterScale = 0.01f;
     static constexpr float kTerrainScale = 1.0f;
     static constexpr const char* kPlayerActionFile = "Assets/Data/PlayerActions.txt";
     static constexpr const char* kEnemyActionFile = "Assets/Data/EnemyActions.txt";
@@ -47,6 +46,8 @@ class GameApp : public Engine::Application
     Engine::TimelineRecorder m_playerTrack;
     Engine::TimelineRecorder m_enemyTrack;
     Engine::Transform m_enemyTf;
+
+    bool m_showTools = true;  
 
     bool m_prevAttack = false;
     bool m_prevParry = false;
@@ -76,6 +77,9 @@ class GameApp : public Engine::Application
     float m_enemyKeepRange = 1.8f;   // 敵の攻撃範囲
     float m_enemyChaseRange = 2.4f;  // 追跡開始する距離
     bool  m_enemyChasing = false;
+
+    bool m_prevDodge = false;
+    XMFLOAT3 m_actionMove{ 0.0f, 0.0f, 0.0f };   // アクション中に進む向き
 
 protected:
     bool OnStart() override
@@ -137,6 +141,8 @@ private:
         m_character.LoadClip("StrafeL", "Assets/Model/Bot_StrafeL.fbx");
         m_character.LoadClip("StrafeR", "Assets/Model/Bot_StrafeR.fbx");
         m_character.LoadClip("RunBack", "Assets/Model/Bot_RunBack.fbx");
+        m_character.LoadClip("Dodge", "Assets/Model/Bot_Dodge.fbx", false);
+
 
         m_character.Play("Idle");
         std::printf("クリップ %zu 本 / ボーン %zu 本\n",
@@ -152,6 +158,10 @@ private:
         m_enemy.LoadClip("Deflected", "Assets/Model/Bot_Deflected.fbx", false);
         m_enemy.LoadClip("Break", "Assets/Model/Bot_Break.fbx", false);
         m_enemy.LoadClip("Run", "Assets/Model/Bot_Run.fbx");
+        m_enemy.LoadClip("Slash2", "Assets/Model/Bot_Slash2.fbx", false);
+        m_enemy.LoadClip("Slash3", "Assets/Model/Bot_Slash3.fbx", false);
+        m_enemy.LoadClip("Thrust", "Assets/Model/Bot_Thrust.fbx", false);
+        m_enemy.LoadClip("Heavy", "Assets/Model/Bot_Heavy.fbx", false);
         m_enemy.Play("Idle");
 
         return true;
@@ -186,8 +196,20 @@ private:
         parry.isParry = true;
         parry.startup = 2;    // 構えるまで
         parry.active = 15;    // 受付 7F
-        parry.recovery = 15;   // 外したときの隙
+        parry.recovery = 15;  // 外したときの隙
         m_actions.AddAction(parry);
+
+        // 回避
+        Engine::ActionData dodge;
+        dodge.name = "Dodge";
+        dodge.clipName = "Dodge";
+        dodge.blendSeconds = 0.05f;
+        dodge.isDodge = true;
+        dodge.startup = 3;    // 回避するまで
+        dodge.active = 14;    // 無敵
+        dodge.recovery = 12;  // 後隙
+        dodge.moveSpeed = 7.0f;
+        m_actions.AddAction(dodge);
 
         // 敵の攻撃
         m_enemyActions.SetAnimator(&m_enemy.GetAnimator());
@@ -257,6 +279,33 @@ private:
         return std::sqrt(dx * dx + dz * dz);
     }
 
+    // カメラ基準で方向を作る
+    bool ReadMoveInput(float& outX, float& outZ) const
+    {
+        float ix = 0.0f;
+        float iz = 0.0f;
+        if (GetAsyncKeyState('W') & 0x8000) iz += 1.0f;
+        if (GetAsyncKeyState('S') & 0x8000) iz -= 1.0f;
+        if (GetAsyncKeyState('D') & 0x8000) ix += 1.0f;
+        if (GetAsyncKeyState('A') & 0x8000) ix -= 1.0f;
+
+        if (ix == 0.0f && iz == 0.0f) return false;
+
+        // カメラの向きから「前」と「右」を作る
+        const float cy = m_camera.GetYaw();
+        const float fx = std::sin(cy), fz = std::cos(cy);
+        const float rx = std::cos(cy), rz = -std::sin(cy);
+
+        float mx = fx * iz + rx * ix;
+        float mz = fz * iz + rz * ix;
+
+        // 正規化
+        const float len = std::sqrt(mx * mx + mz * mz);
+        outX = mx / len;
+        outZ = mz / len;
+        return true;
+    }
+
     // 移動
     void UpdateMovement(float dt)
     {
@@ -266,32 +315,13 @@ private:
         if (m_lockOn)
             m_playerTf.TurnTowards(YawToEnemy(), m_turnSpeed * dt);
 
-        float ix = 0.0f;   // 左右
-        float iz = 0.0f;   // 前後
-        if (GetAsyncKeyState('W') & 0x8000) iz += 1.0f;
-        if (GetAsyncKeyState('S') & 0x8000) iz -= 1.0f;
-        if (GetAsyncKeyState('D') & 0x8000) ix += 1.0f;
-        if (GetAsyncKeyState('A') & 0x8000) ix -= 1.0f;
-
-        if (ix == 0.0f && iz == 0.0f)
+        float mx = 0.0f, mz = 0.0f;
+        if (!ReadMoveInput(mx, mz))
         {
             if (m_character.CurrentClipName() != "Idle")
                 m_character.Play("Idle", 0.2f);
             return;
         }
-
-        // カメラの向きから「前」と「右」を作る
-        const float cy = m_camera.GetYaw();
-        const float fx = std::sin(cy), fz = std::cos(cy);    // 前
-        const float rx = std::cos(cy), rz = -std::sin(cy);   // 右
-
-        float mx = fx * iz + rx * ix;
-        float mz = fz * iz + rz * ix;
-
-        // 斜めだけ速くならないよう、長さを 1 にそろえる
-        const float len = std::sqrt(mx * mx + mz * mz);
-        mx /= len;
-        mz /= len;
 
         m_playerTf.position.x += mx * m_moveSpeed * dt;
         m_playerTf.position.z += mz * m_moveSpeed * dt;
@@ -315,6 +345,33 @@ private:
 
         if (m_character.CurrentClipName() != clip)
             m_character.Play(clip, 0.15f);
+    }
+
+    // 回避する向き
+    void SetDodgeDirection()
+    {
+        float mx = 0.0f, mz = 0.0f;
+        if (ReadMoveInput(mx, mz))
+        {
+            m_actionMove = XMFLOAT3(mx, 0.0f, mz);
+            if (!m_lockOn) m_playerTf.yaw = std::atan2(mx, mz);
+            return;
+        }
+
+        // 入力なし
+        const XMFLOAT3 f = m_playerTf.Forward();
+        m_actionMove = XMFLOAT3(-f.x, 0.0f, -f.z);
+    }
+
+    // アクションが自分から進む分を動かす
+    void UpdateActionMove(float dt)
+    {
+        const Engine::ActionData* a = m_actions.CurrentAction();
+        if (!a || a->moveSpeed <= 0.0f) return;
+        if (m_actions.Phase() == ActionPhase::Recovery) return;
+
+        m_playerTf.position.x += m_actionMove.x * a->moveSpeed * dt;
+        m_playerTf.position.z += m_actionMove.z * a->moveSpeed * dt;
     }
 
     // 敵の行動
@@ -388,6 +445,10 @@ protected:
         if (parryHeld && !m_prevParry) m_input.Push("Parry");
         m_prevParry = parryHeld;
 
+        const bool dodgeHeld = (GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0;
+        if (dodgeHeld && !m_prevDodge) m_input.Push("Dodge");
+        m_prevDodge = dodgeHeld;
+
         const bool lockHeld = (GetAsyncKeyState('Q') & 0x8000) != 0;
         if (lockHeld && !m_prevLockKey) m_lockOn = !m_lockOn;
         m_prevLockKey = lockHeld;
@@ -400,7 +461,13 @@ protected:
         }
 
         // 行動の発動
-        if (m_input.Has("Parry") && m_actions.CanCancelInto("Parry"))
+        if (m_input.Has("Dodge") && m_actions.CanCancelInto("Dodge"))
+        {
+            m_input.Consume("Dodge");
+            SetDodgeDirection();          // 向きは技を出す前に決める
+            m_actions.StartAction("Dodge");
+        }
+        else if (m_input.Has("Parry") && m_actions.CanCancelInto("Parry"))
         {
             m_input.Consume("Parry");
             m_actions.StartAction("Parry");
@@ -415,6 +482,7 @@ protected:
 
         // 移動
         UpdateMovement(dt);
+        UpdateActionMove(dt);
 
         // 敵はいつもプレイヤーの方を向く
         m_enemyTf.yaw = std::atan2(
@@ -560,99 +628,131 @@ protected:
 
     void OnGui() override
     {
+        // --- コマ送り ---
+        Engine::FixedTimestep& clock = Clock();
+        if (!ImGui::GetIO().WantCaptureKeyboard)
+        {
+            if (ImGui::IsKeyPressed(ImGuiKey_F1, false))
+                m_showTools = !m_showTools;
+
+            if (ImGui::IsKeyPressed(ImGuiKey_Space, false))
+                clock.SetPaused(!clock.IsPaused());
+
+            if (clock.IsPaused() && ImGui::IsKeyPressed(ImGuiKey_N, true))
+                clock.RequestSingleStep();
+        }
+
+        if (!m_showTools) return;
+
+        const ImVec2 screen = ImGui::GetMainViewport()->WorkSize;
+        const float panelW = 420.0f;      // 幅
+        const float timelineH = 180.0f;   // 高さ
+
+        ImGui::SetNextWindowPos(ImVec2(screen.x - panelW, 0.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(panelW, screen.y), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowBgAlpha(0.88f);
         ImGui::Begin("アクション調整");
 
         if (ImGui::Button("保存")) SaveActionFiles();
         ImGui::SameLine();
         if (ImGui::Button("読み込み")) LoadActionFiles();
+        ImGui::SameLine();
+        ImGui::TextDisabled("F1 で表示切替");
+
+        ImGui::TextDisabled("WASD 移動 / Z 攻撃 / X パリィ / Shift 回避 / Q ロック");
         ImGui::Separator();
 
-        ImGui::Text("Z キーで攻撃");
-        ImGui::Separator();
-
-        Engine::DrawPhaseLegend();
-        ImGui::SliderFloat("拡大", &m_zoom, 2.0f, 16.0f, "%.1f px/F");
-        Engine::DrawFrameRuler(120, m_zoom);
-        ImGui::Separator();
-
-        ImGui::SeparatorText("プレイヤー");
-        Engine::DrawActionEditor(m_actions, m_zoom);
-
-        // 先行入力の受付
-        int window = m_input.Window();
-        if (ImGui::SliderInt("先行入力の受付", &window, 0, 30))
-            m_input.SetWindow(window);
-
-        ImGui::SliderFloat("歩く速さ", &m_moveSpeed, 1.0f, 8.0f);
-        ImGui::SliderFloat("振り向く速さ", &m_turnSpeed, 2.0f, 30.0f);
-        ImGui::Checkbox("ロックオン (Q)", &m_lockOn);
-        ImGui::SliderFloat("ロック時のカメラ", &m_lockCameraSpeed, 1.0f, 20.0f);
-
-        ImGui::Separator();
-
-        // 今の進行状況
-        ImGui::Text("いま : %s   %d F",
-            Engine::ToString(m_actions.Phase()), m_actions.ElapsedFrames());
-
-        ImGui::Separator();
-        ImGui::Text("敵 : %s  %d F",
-            Engine::ToString(m_enemyActions.Phase()),
-            m_enemyActions.ElapsedFrames());
-
-        ImGui::SeparatorText("敵");
-        Engine::DrawActionEditor(m_enemyActions, m_zoom);
-
-        ImGui::SliderInt("敵の攻撃間隔", &m_enemyInterval, 30, 240);
-        ImGui::Text("敵との距離 %.2f m", DistanceToEnemy());
-        ImGui::SliderFloat("敵の歩く速さ", &m_enemySpeed, 0.5f, 6.0f);
-        ImGui::SliderFloat("敵が詰める距離", &m_enemyKeepRange, 0.5f, 5.0f);
-        ImGui::SliderFloat("敵が追い始める距離", &m_enemyChaseRange, 0.5f, 6.0f);
-
-        ImGui::SliderInt("弾き時の停止", &m_parry.hitStopOnParry, 0, 30);
-        ImGui::SliderInt("被弾時の停止", &m_parry.hitStopOnHit, 0, 30);
-
-        ImGui::Separator();
-        ImGui::Text("弾いた %d / 食らった %d / 斬った %d",
-            m_parryCount, m_hitCount, m_enemyHitCount);
-        if (ImGui::Button("記録をリセット"))
+        if (ImGui::BeginTabBar("tabs"))
         {
-            m_parryCount = 0; m_hitCount = 0; m_enemyHitCount = 0;
+            if (ImGui::BeginTabItem("プレイヤー"))
+            {
+                ImGui::SliderFloat("拡大", &m_zoom, 2.0f, 16.0f, "%.1f px/F");
+                Engine::DrawFrameRuler(120, m_zoom);
+                ImGui::Separator();
+
+                Engine::DrawActionEditor(m_actions, m_zoom);
+
+                ImGui::Separator();
+
+                // 先行入力の受付
+                int window = m_input.Window();
+                if (ImGui::SliderInt("先行入力の受付", &window, 0, 30))
+                    m_input.SetWindow(window);
+
+                ImGui::SliderFloat("歩く速さ", &m_moveSpeed, 1.0f, 8.0f);
+                ImGui::SliderFloat("振り向く速さ", &m_turnSpeed, 2.0f, 30.0f);
+                ImGui::Checkbox("ロックオン (Q)", &m_lockOn);
+                ImGui::SliderFloat("ロック時のカメラ", &m_lockCameraSpeed, 1.0f, 20.0f);
+
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("敵"))
+            {
+                Engine::DrawFrameRuler(120, m_zoom);
+                ImGui::Separator();
+
+                Engine::DrawActionEditor(m_enemyActions, m_zoom);
+
+                ImGui::Separator();
+                ImGui::SliderInt("敵の攻撃間隔", &m_enemyInterval, 30, 240);
+                ImGui::Text("敵との距離 %.2f m", DistanceToEnemy());
+                ImGui::SliderFloat("敵の歩く速さ", &m_enemySpeed, 0.5f, 6.0f);
+                ImGui::SliderFloat("敵が詰める距離", &m_enemyKeepRange, 0.5f, 5.0f);
+                ImGui::SliderFloat("敵が追い始める距離", &m_enemyChaseRange, 0.5f, 6.0f);
+
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("戦闘"))
+            {
+                // 今の進行状況
+                ImGui::Text("自分 : %s   %d F",
+                    Engine::ToString(m_actions.Phase()), m_actions.ElapsedFrames());
+                ImGui::Text("敵   : %s   %d F",
+                    Engine::ToString(m_enemyActions.Phase()),
+                    m_enemyActions.ElapsedFrames());
+
+                ImGui::Separator();
+                ImGui::Text("体幹");
+
+                ImGui::Text("自分");
+                ImGui::SameLine();
+                ImGui::ProgressBar(m_playerPosture.Ratio(), ImVec2(-1.0f, 0.0f),
+                    m_playerPosture.IsBroken() ? "崩壊" : "");
+
+                ImGui::Text("敵  ");
+                ImGui::SameLine();
+                ImGui::ProgressBar(m_enemyPosture.Ratio(), ImVec2(-1.0f, 0.0f),
+                    m_enemyPosture.IsBroken() ? "崩壊" : "");
+
+                ImGui::Separator();
+                ImGui::SliderInt("弾き時の停止", &m_parry.hitStopOnParry, 0, 30);
+                ImGui::SliderInt("被弾時の停止", &m_parry.hitStopOnHit, 0, 30);
+                ImGui::SliderFloat("弾き1回の体幹", &m_parry.parryPostureDamage, 5.0f, 60.0f);
+                ImGui::SliderFloat("体幹の自然回復", &m_enemyPosture.regenPerFrame, 0.0f, 1.0f);
+                ImGui::SliderInt("回復までの待ち", &m_enemyPosture.regenDelayFrames, 0, 180);
+                ImGui::SliderInt("崩壊の長さ", &m_enemyPosture.breakFrames, 30, 300);
+
+                ImGui::Separator();
+                ImGui::Text("弾いた %d / 食らった %d / 斬った %d",
+                    m_parryCount, m_hitCount, m_enemyHitCount);
+                if (ImGui::Button("記録をリセット"))
+                {
+                    m_parryCount = 0; m_hitCount = 0; m_enemyHitCount = 0;
+                }
+
+                ImGui::EndTabItem();
+            }
+            ImGui::EndTabBar();
         }
-
-        ImGui::Separator();
-        ImGui::Text("体幹");
-
-        ImGui::Text("自分");
-        ImGui::SameLine();
-        ImGui::ProgressBar(m_playerPosture.Ratio(), ImVec2(-1.0f, 0.0f),
-            m_playerPosture.IsBroken() ? "崩壊" : "");
-
-        ImGui::Text("敵  ");
-        ImGui::SameLine();
-        ImGui::ProgressBar(m_enemyPosture.Ratio(), ImVec2(-1.0f, 0.0f),
-            m_enemyPosture.IsBroken() ? "崩壊" : "");
-
-        ImGui::SliderFloat("弾き1回の体幹", &m_parry.parryPostureDamage, 5.0f, 60.0f);
-        ImGui::SliderFloat("体幹の自然回復", &m_enemyPosture.regenPerFrame, 0.0f, 1.0f);
-        ImGui::SliderInt("回復までの待ち", &m_enemyPosture.regenDelayFrames, 0, 180);
-        ImGui::SliderInt("崩壊の長さ", &m_enemyPosture.breakFrames, 30, 300);
 
         ImGui::End();
 
+        ImGui::SetNextWindowPos(ImVec2(0.0f, screen.y - timelineH), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(screen.x - panelW, timelineH), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowBgAlpha(0.88f);
         ImGui::Begin("タイムライン");
-
-        // ---コマ送り---
-        Engine::FixedTimestep& clock = Clock();
-
-        if (!ImGui::GetIO().WantCaptureKeyboard)
-        {
-            if (ImGui::IsKeyPressed(ImGuiKey_Space, false))
-                clock.SetPaused(!clock.IsPaused());
-
-            // 押しっぱなしで連続して進む
-            if (clock.IsPaused() && ImGui::IsKeyPressed(ImGuiKey_N, true))
-                clock.RequestSingleStep();
-        }
 
         if (ImGui::Button(clock.IsPaused() ? "再開 (Space)" : "一時停止 (Space)"))
             clock.SetPaused(!clock.IsPaused());

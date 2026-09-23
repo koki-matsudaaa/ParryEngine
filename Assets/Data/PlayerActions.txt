@@ -9,16 +9,39 @@ cancelFrom = 20
 isParry = 0
 postureDamage = 20
 unblockable = 0
+aiWeight = 0
+range = 2
+isDodge = 0
+moveSpeed = 0
 cancelTo = Parry, Slash
 
 [Parry]
 clip = Parry
 blendSeconds = 0.1
 startup = 2
-active = 10
+active = 15
 recovery = 15
 cancelFrom = -1
 isParry = 1
 postureDamage = 20
 unblockable = 0
+aiWeight = 0
+range = 2
+isDodge = 0
+moveSpeed = 0
+
+[Dodge]
+clip = Dodge
+blendSeconds = 0.05
+startup = 3
+active = 25
+recovery = 20
+cancelFrom = -1
+isParry = 0
+postureDamage = 0
+unblockable = 0
+aiWeight = 0
+range = 1.5
+isDodge = 1
+moveSpeed = 7
 

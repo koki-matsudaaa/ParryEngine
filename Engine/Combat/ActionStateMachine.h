@@ -14,6 +14,9 @@ namespace Engine
         // アニメの再生先
         void SetAnimator(Animator* animator) { m_animator = animator; }
 
+        // 登録されたモーションの一覧
+        const Animator* GetAnimator() const { return m_animator; }
+
         // アクションを登録
         void AddAction(const ActionData& action);
 
@@ -46,6 +49,9 @@ namespace Engine
 
         // 今パリィ受付中か
         bool OnParry() const;
+
+        // 今無敵中か
+        bool IsInvincible() const;
 
         // 登録されているアクションを名前で引く。
         const ActionData* Find(const std::string& name) const;

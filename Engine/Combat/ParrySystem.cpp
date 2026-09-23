@@ -17,6 +17,9 @@ namespace Engine
         // 間合いの外なら空振り
         if (distance > a->range) return ParryResult::None;
 
+        // よけた時　はじけない攻撃より前に
+        if (defender.IsInvincible()) return ParryResult::None;
+
         // はじけない攻撃の貫通
         if (a->unblockable) return ParryResult::Hit;
 

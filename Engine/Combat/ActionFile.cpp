@@ -58,6 +58,8 @@ namespace Engine
             f << "unblockable = " << (a.unblockable ? 1 : 0) << "\n";
             f << "aiWeight = " << a.aiWeight << "\n";
             f << "range = " << a.range << "\n";
+            f << "isDodge = " << (a.isDodge ? 1 : 0) << "\n";
+            f << "moveSpeed = " << a.moveSpeed << "\n";
             if (!a.nextAction.empty())
                 f << "nextAction = " << a.nextAction << "\n";
 
@@ -124,6 +126,8 @@ namespace Engine
                 else if (key == "aiWeight")      a.aiWeight = std::stoi(val);
                 else if (key == "nextAction")    a.nextAction = val;
                 else if (key == "range")         a.range = std::stof(val);
+                else if (key == "isDodge")       a.isDodge = (std::stoi(val) != 0);
+                else if (key == "moveSpeed")     a.moveSpeed = std::stof(val);
             }
             catch (...)
             {

@@ -137,4 +137,11 @@ namespace Engine
         return m_actions[m_current].isParry
             && Phase() == ActionPhase::Active;
     }
+    bool ActionStateMachine::IsInvincible() const
+    {
+        if (m_current < 0) return false;
+
+        return m_actions[m_current].isDodge
+            && Phase() == ActionPhase::Active;
+    }
 }

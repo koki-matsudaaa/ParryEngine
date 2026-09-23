@@ -122,6 +122,12 @@ namespace Engine
         return (m_currentClip >= 0) ? m_clips[m_currentClip].name : empty;
     }
 
+    const std::string& Animator::ClipName(size_t index) const
+    {
+        static const std::string empty;
+        return (index < m_clips.size()) ? m_clips[index].name : empty;
+    }
+
     int Animator::CurrentFrameCount() const
     {
         return (m_currentClip >= 0) ? m_clips[m_currentClip].FrameCount() : 0;

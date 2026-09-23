@@ -56,6 +56,12 @@ namespace Engine
         // 攻撃が届く距離
         float range = 2.0f;
 
+        // 回避
+        bool isDodge = false;
+
+        // 回避の速さ　距離にかかわる
+        float moveSpeed = 0.0f;
+
         int TotalFrames() const { return startup + active + recovery; }
     };
 }

@@ -46,10 +46,29 @@ namespace Engine
                 ImGui::TextDisabled("空 = 何にでも移れる");
             ImGui::TreePop();
         }
+
+        // 再生するモーションを選ぶ
+        void ClipCombo(ActionData& a, const Animator* anim)
+        {
+            const char* preview = a.clipName.empty() ? "(なし)" : a.clipName.c_str();
+            if (!ImGui::BeginCombo("モーション", preview)) return;
+
+            if (anim)
+            {
+                for (size_t i = 0; i < anim->ClipCount(); i++)
+                {
+                    const std::string& n = anim->ClipName(i);
+                    if (ImGui::Selectable(n.c_str(), a.clipName == n))
+                        a.clipName = n;
+                }
+            }
+            ImGui::EndCombo();
+        }
     }
 
     void DrawActionEditor(ActionStateMachine& sm, float ppf)
     {
+        ImGui::PushID(&sm);
         auto& all = sm.Actions();
 
         for (auto& a : all)
@@ -63,7 +82,8 @@ namespace Engine
 
             if (open)
             {
-                ImGui::SliderInt("発生", &a.startup, 0, 60);
+                ClipCombo(a, sm.GetAnimator());
+                ImGui::SliderInt("発生", &a.startup, 0, 100);
                 ImGui::SliderInt("判定", &a.active, 0, 60);
                 ImGui::SliderInt("硬直", &a.recovery, 0, 90);
                 ImGui::SliderInt("キャンセル", &a.cancelFrom, -1, 90);
@@ -74,6 +94,10 @@ namespace Engine
                 ImGui::Checkbox("パリィ技", &a.isParry);
                 ImGui::SameLine();
                 ImGui::Checkbox("弾けない", &a.unblockable);
+                ImGui::SameLine();
+                ImGui::Checkbox("回避技", &a.isDodge);
+
+                ImGui::SliderFloat("移動速度", &a.moveSpeed, 0.0f, 12.0f, "%.1f m/s");
 
                 NextActionCombo(a, all);
                 CancelToTree(a, all);
@@ -84,5 +108,22 @@ namespace Engine
             }
             ImGui::PopID();
         }
+
+        ImGui::Separator();
+
+        static char newName[32] = "";
+        ImGui::InputText("新しい技の名前", newName, sizeof(newName));
+        ImGui::SameLine();
+        if (ImGui::Button("追加") && newName[0] != '\0')
+        {
+            ActionData a;
+            a.name = newName;
+            a.startup = 20;
+            a.active = 5;
+            a.recovery = 20;
+            sm.AddAction(a);
+            newName[0] = '\0';
+        }
+        ImGui::PopID();
     }
 }

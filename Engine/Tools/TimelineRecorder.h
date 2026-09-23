@@ -10,6 +10,7 @@ namespace Engine
     {
         ActionPhase phase = ActionPhase::None;
         bool isParry = false;   // その瞬間パリィを受け付けていたか
+        bool isDodge = false;   // その瞬間無敵だったか
     };
 
     enum class TimelineEvent { None, ParrySuccess, Hit };
