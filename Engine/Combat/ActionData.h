@@ -62,6 +62,15 @@ namespace Engine
         // 回避の速さ　距離にかかわる
         float moveSpeed = 0.0f;
 
+        // ガード
+        bool isGuard = false;
+
+        // キーホールド
+        bool holdable = false;
+
+        // はじかれたときの後隙
+        int deflectFrames = 0;
+
         int TotalFrames() const { return startup + active + recovery; }
     };
 }

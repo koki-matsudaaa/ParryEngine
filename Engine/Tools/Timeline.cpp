@@ -11,6 +11,7 @@ namespace
     const ImVec4 kParry = ImVec4(0.25f, 0.75f, 0.50f, 1.0f);    // パリィ受付 (緑)
     const ImVec4 kUnblock = ImVec4(0.85f, 0.45f, 0.15f, 1.0f);  // 弾けない (橙)
     const ImVec4 kDodge = ImVec4(1.00f, 0.60f, 0.80f, 1.0f);    // 無敵 (ピンク)
+    const ImVec4 kGuard = ImVec4(0.70f, 0.70f, 0.75f, 1.0f);   // ガード (灰)
 
     constexpr float kBarHeight = 18.0f;
     constexpr float kRulerHeight = 14.0f;
@@ -62,6 +63,7 @@ namespace Engine
         const ImVec4& activeColor = action.unblockable ? kUnblock
             : action.isParry ? kParry
             : action.isDodge ? kDodge
+            : action.isGuard ? kGuard
             : kActive;
 
         float x = 0.0f;
@@ -98,6 +100,7 @@ namespace Engine
         ImGui::TextColored(kParry, "受付"); ImGui::SameLine();
         ImGui::TextColored(kUnblock, "危"); ImGui::SameLine();
         ImGui::TextColored(kDodge, "無敵"); ImGui::SameLine();
+        ImGui::TextColored(kGuard, "ガード"); ImGui::SameLine();
         ImGui::TextDisabled("| 黒線=キャンセル可 白線=再生位置");
     }
     
@@ -119,7 +122,10 @@ namespace Engine
             const ImVec4* c = &kRecovery;
             if (f.phase == ActionPhase::Startup)     c = &kStartup;
             else if (f.phase == ActionPhase::Active)
-                c = f.isParry ? &kParry : (f.isDodge ? &kDodge : &kActive);
+                c = f.isParry ? &kParry
+                : f.isDodge ? &kDodge
+                : f.isGuard ? &kGuard
+                : &kActive;
 
             const float x = origin.x + i * ppf;
             dl->AddRectFilled(ImVec2(x, origin.y),

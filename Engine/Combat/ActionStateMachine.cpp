@@ -36,6 +36,7 @@ namespace Engine
         m_current = it->second;
         m_frame = 0;
         m_prevPhase = ActionPhase::None;    //  リセット
+        m_stagger = 0;
 
         // 対応するアニメへ切り替える。
         const ActionData& a = m_actions[m_current];
@@ -55,6 +56,18 @@ namespace Engine
 
         m_prevPhase = Phase();   // 進める前の段階を覚えておく
 
+        // 弾かれて固まっている間は進まない
+        if (m_stagger > 0)
+        {
+            m_stagger--;
+            return;
+        }
+
+        // ホールド中の判定
+        const ActionData& cur = m_actions[m_current];
+        if (cur.holdable && m_hold && Phase() == ActionPhase::Active)
+            return;
+
         m_frame++;
 
         // 全フレームを消化したら終了。
@@ -72,6 +85,7 @@ namespace Engine
     {
         m_current = -1;
         m_frame = 0;
+        m_stagger = 0;
     }
 
     void ActionStateMachine::Clear()
@@ -80,6 +94,7 @@ namespace Engine
         m_indexByName.clear();
         m_current = -1;
         m_frame = 0;
+        m_stagger = 0;
         m_prevPhase = ActionPhase::None;
     }
 
@@ -143,5 +158,18 @@ namespace Engine
 
         return m_actions[m_current].isDodge
             && Phase() == ActionPhase::Active;
+    }
+
+    bool ActionStateMachine::IsGuarding() const
+    {
+        if (m_current < 0) return false;
+
+        return m_actions[m_current].isGuard
+            && Phase() == ActionPhase::Active;
+    }
+
+    void ActionStateMachine::AddStagger(int frames)
+    {
+        if (frames > m_stagger) m_stagger = frames;
     }
 }

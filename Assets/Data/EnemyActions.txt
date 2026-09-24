@@ -13,6 +13,9 @@ aiWeight = 3
 range = 2
 isDodge = 0
 moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 30
 
 [EnemyQuick]
 clip = Thrust
@@ -28,6 +31,9 @@ aiWeight = 2
 range = 2
 isDodge = 0
 moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 20
 
 [EnemyCombo1]
 clip = Slash
@@ -43,6 +49,9 @@ aiWeight = 2
 range = 2
 isDodge = 0
 moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 8
 nextAction = EnemyCombo2
 
 [EnemyCombo2]
@@ -59,11 +68,14 @@ aiWeight = 0
 range = 2
 isDodge = 0
 moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 40
 
 [EnemyDanger]
 clip = Heavy
 blendSeconds = 0.1
-startup = 100
+startup = 125
 active = 30
 recovery = 45
 cancelFrom = -1
@@ -74,6 +86,9 @@ aiWeight = 1
 range = 2
 isDodge = 0
 moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 0
 
 [Deflected]
 clip = Deflected
@@ -89,6 +104,9 @@ aiWeight = 0
 range = 2
 isDodge = 0
 moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 0
 
 [Flinch]
 clip = Deflected
@@ -104,4 +122,7 @@ aiWeight = 0
 range = 2
 isDodge = 0
 moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 0
 

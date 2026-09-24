@@ -73,6 +73,17 @@ class GameApp : public Engine::Application
     bool  m_prevLockKey = false;
     float m_lockCameraSpeed = 8.0f;  // カメラの振り向き速度
 
+    // ロックオン中のカメラ
+    float m_lockDistance = 5.0f;     // 引き
+    float m_lockHeight = 1.4f;       // 見る高さ
+    float m_lockSide = 0.6f;         // 肩越しのずらし
+    float m_lockPitch = 0.30f;       // 見下ろし角
+    float m_lockTargetBias = 0.25f;  // 注視点を敵側へ寄せる割合
+
+    // 通常時のカメラ
+    float m_freeDistance = 4.0f;
+    float m_freeHeight = 1.2f;
+
     float m_enemySpeed = 2.0f;       // 敵の速さ
     float m_enemyKeepRange = 1.8f;   // 敵の攻撃範囲
     float m_enemyChaseRange = 2.4f;  // 追跡開始する距離
@@ -142,6 +153,7 @@ private:
         m_character.LoadClip("StrafeR", "Assets/Model/Bot_StrafeR.fbx");
         m_character.LoadClip("RunBack", "Assets/Model/Bot_RunBack.fbx");
         m_character.LoadClip("Dodge", "Assets/Model/Bot_Dodge.fbx", false);
+        m_character.LoadClip("Guard", "Assets/Model/Bot_Guard.fbx");
 
 
         m_character.Play("Idle");
@@ -434,6 +446,9 @@ protected:
             const float diff = Engine::AngleDiff(m_camera.GetYaw(), YawToEnemy());
             const float rate = std::min(1.0f, m_lockCameraSpeed * dt);
             m_camera.AddYaw(diff * rate);
+
+            m_camera.SetPitch(m_camera.GetPitch()
+                + (m_lockPitch - m_camera.GetPitch()) * rate);
         }
 
         // 入力
@@ -441,7 +456,10 @@ protected:
         if (attackHeld && !m_prevAttack) m_input.Push("Attack");
         m_prevAttack = attackHeld;
 
-        const bool parryHeld = (GetAsyncKeyState('X') & 0x8000) != 0;
+        const bool guardHeld = (GetAsyncKeyState('X') & 0x8000) != 0;
+        m_actions.SetHold(guardHeld);
+
+        const bool parryHeld = (GetAsyncKeyState('C') & 0x8000) != 0;
         if (parryHeld && !m_prevParry) m_input.Push("Parry");
         m_prevParry = parryHeld;
 
@@ -477,6 +495,11 @@ protected:
         {
             m_input.Consume("Attack");
             m_actions.StartAction("Slash");
+            if (m_lockOn) m_playerTf.yaw = YawToEnemy();
+        }
+        else if (guardHeld && m_actions.IsIdle())
+        {
+            m_actions.StartAction("Guard");
             if (m_lockOn) m_playerTf.yaw = YawToEnemy();
         }
 
@@ -524,15 +547,19 @@ protected:
 
             if (m_enemyPosture.Add(m_parry.parryPostureDamage))
             {
-                // 崩壊
+                // 崩壊。ここは連撃も打ち切る
                 m_enemyActions.Cancel();
                 m_enemy.Play("Break", 0.15f);
                 std::printf("弾いた! → 体幹崩壊!\n");
             }
             else
             {
-                // 攻撃を中断させ、弾かれ硬直へ落とす。
-                m_enemyActions.StartAction("Deflected");
+                // 連撃は止めない
+                int frames = 0;
+                if (const auto* a = m_enemyActions.CurrentAction())
+                    frames = a->deflectFrames;
+
+                m_enemyActions.AddStagger(frames);
                 std::printf("弾いた!  (敵の体幹 %.0f / %.0f)\n",
                     m_enemyPosture.Value(), m_enemyPosture.Max());
             }
@@ -558,6 +585,19 @@ protected:
                     m_playerPosture.Value(), m_playerPosture.Max());
             break;
         }
+        case Engine::ParryResult::Guarded:
+        {
+            m_hitStop = m_parry.hitStopOnGuard;
+
+            float dmg = 20.0f;
+            if (const auto* a = m_enemyActions.CurrentAction())
+                dmg = a->postureDamage;
+
+            m_playerPosture.Add(dmg * m_parry.guardPostureRate);
+            std::printf("ガード  (自分の体幹 %.0f / %.0f)\n",
+                m_playerPosture.Value(), m_playerPosture.Max());
+            break;
+        }
         default:
             break;
         }
@@ -570,6 +610,12 @@ protected:
             // 敵に弾かれた
             m_hitStop = m_parry.hitStopOnParry;
             m_playerPosture.Add(m_parry.parryPostureDamage);
+
+            int frames = 0;
+            if (const auto* a = m_actions.CurrentAction())
+                frames = a->deflectFrames;
+            m_actions.AddStagger(frames);
+
             std::printf("弾かれた!\n");
             break;
         }
@@ -611,7 +657,25 @@ protected:
         (void)alpha;
 
         // カメラ
-        m_camera.SetTarget(m_playerTf.position);
+        if (m_lockOn)
+        {
+            XMFLOAT3 t = m_playerTf.position;
+            t.x += (m_enemyTf.position.x - t.x) * m_lockTargetBias;
+            t.z += (m_enemyTf.position.z - t.z) * m_lockTargetBias;
+
+            m_camera.SetTarget(t);
+            m_camera.SetDistance(m_lockDistance);
+            m_camera.lookHeight = m_lockHeight;
+            m_camera.sideOffset = m_lockSide;
+        }
+        else
+        {
+            m_camera.SetTarget(m_playerTf.position);
+            m_camera.SetDistance(m_freeDistance);
+            m_camera.lookHeight = m_freeHeight;
+            m_camera.sideOffset = 0.0f;
+        }
+
         GetRenderer().SetCamera(m_camera.View(), m_camera.Projection(), m_camera.Eye());
 
         // 空
@@ -659,7 +723,7 @@ protected:
         ImGui::SameLine();
         ImGui::TextDisabled("F1 で表示切替");
 
-        ImGui::TextDisabled("WASD 移動 / Z 攻撃 / X パリィ / Shift 回避 / Q ロック");
+        ImGui::TextDisabled("WASD 移動 / Z 攻撃 / X ガード / C パリィ / Shift 回避 / Q ロック");
         ImGui::Separator();
 
         if (ImGui::BeginTabBar("tabs"))
@@ -683,6 +747,23 @@ protected:
                 ImGui::SliderFloat("振り向く速さ", &m_turnSpeed, 2.0f, 30.0f);
                 ImGui::Checkbox("ロックオン (Q)", &m_lockOn);
                 ImGui::SliderFloat("ロック時のカメラ", &m_lockCameraSpeed, 1.0f, 20.0f);
+                if (ImGui::TreeNode("ロック中のカメラ位置"))
+                {
+                    ImGui::SliderFloat("引き", &m_lockDistance, 2.0f, 10.0f, "%.1f m");
+                    ImGui::SliderFloat("見る高さ", &m_lockHeight, 0.5f, 3.0f, "%.2f m");
+                    ImGui::SliderFloat("肩越し", &m_lockSide, -2.0f, 2.0f, "%.2f m");
+                    ImGui::SliderFloat("見下ろし角", &m_lockPitch,
+                        m_camera.minPitch, m_camera.maxPitch, "%.2f");
+                    ImGui::SliderFloat("敵へ寄せる", &m_lockTargetBias, 0.0f, 0.8f, "%.2f");
+                    ImGui::TreePop();
+                }
+
+                if (ImGui::TreeNode("通常のカメラ"))
+                {
+                    ImGui::SliderFloat("引き##free", &m_freeDistance, 2.0f, 10.0f, "%.1f m");
+                    ImGui::SliderFloat("見る高さ##free", &m_freeHeight, 0.5f, 3.0f, "%.2f m");
+                    ImGui::TreePop();
+                }
 
                 ImGui::EndTabItem();
             }
@@ -733,6 +814,8 @@ protected:
                 ImGui::SliderFloat("体幹の自然回復", &m_enemyPosture.regenPerFrame, 0.0f, 1.0f);
                 ImGui::SliderInt("回復までの待ち", &m_enemyPosture.regenDelayFrames, 0, 180);
                 ImGui::SliderInt("崩壊の長さ", &m_enemyPosture.breakFrames, 30, 300);
+                ImGui::SliderInt("ガード時の停止", &m_parry.hitStopOnGuard, 0, 30);
+                ImGui::SliderFloat("ガードで通る割合", &m_parry.guardPostureRate, 0.0f, 1.0f);
 
                 ImGui::Separator();
                 ImGui::Text("弾いた %d / 食らった %d / 斬った %d",

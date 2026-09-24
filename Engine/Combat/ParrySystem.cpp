@@ -26,6 +26,9 @@ namespace Engine
         // その瞬間に受付中だったか
         if (defender.OnParry()) return ParryResult::Success;
 
+        // ガードしていれば受け止め
+        if (defender.IsGuarding()) return ParryResult::Guarded;
+
         return ParryResult::Hit;
     }
 }

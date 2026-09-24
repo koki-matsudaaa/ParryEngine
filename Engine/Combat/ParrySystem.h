@@ -7,6 +7,7 @@ namespace Engine
     {
         None,
         Success,   // 弾いた
+        Guarded,   // ガード
         Hit,       // 当たった
     };
 
@@ -22,5 +23,7 @@ namespace Engine
         int hitStopOnParry = 10;
         int hitStopOnHit = 5;
         float parryPostureDamage = 25.0f;
+        int   hitStopOnGuard = 4;
+        float guardPostureRate = 0.35f;   // ガード時に通る体幹の割合
     };
 }

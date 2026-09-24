@@ -83,19 +83,24 @@ namespace Engine
             if (open)
             {
                 ClipCombo(a, sm.GetAnimator());
-                ImGui::SliderInt("発生", &a.startup, 0, 100);
+                ImGui::SliderInt("発生", &a.startup, 0, 150);
                 ImGui::SliderInt("判定", &a.active, 0, 60);
                 ImGui::SliderInt("硬直", &a.recovery, 0, 90);
                 ImGui::SliderInt("キャンセル", &a.cancelFrom, -1, 90);
                 ImGui::SliderFloat("体幹削り", &a.postureDamage, 0.0f, 100.0f, "%.0f");
                 ImGui::SliderInt("AIの重み", &a.aiWeight, 0, 10);
                 ImGui::SliderFloat("届く距離", &a.range, 0.5f, 5.0f, "%.1f m");
+                ImGui::SliderInt("弾かれた隙", &a.deflectFrames, 0, 120);
 
                 ImGui::Checkbox("パリィ技", &a.isParry);
                 ImGui::SameLine();
                 ImGui::Checkbox("弾けない", &a.unblockable);
                 ImGui::SameLine();
                 ImGui::Checkbox("回避技", &a.isDodge);
+
+                ImGui::Checkbox("ガード技", &a.isGuard);
+                ImGui::SameLine();
+                ImGui::Checkbox("ホールド", &a.holdable);
 
                 ImGui::SliderFloat("移動速度", &a.moveSpeed, 0.0f, 12.0f, "%.1f m/s");
 

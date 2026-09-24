@@ -13,22 +13,28 @@ aiWeight = 0
 range = 2
 isDodge = 0
 moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 0
 cancelTo = Parry, Slash
 
 [Parry]
 clip = Parry
-blendSeconds = 0.1
-startup = 2
-active = 15
-recovery = 15
+blendSeconds = 0.05
+startup = 0
+active = 8
+recovery = 12
 cancelFrom = -1
 isParry = 1
 postureDamage = 20
 unblockable = 0
 aiWeight = 0
-range = 2
+range = 1.8
 isDodge = 0
 moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 0
 
 [Dodge]
 clip = Dodge
@@ -44,4 +50,26 @@ aiWeight = 0
 range = 1.5
 isDodge = 1
 moveSpeed = 7
+isGuard = 0
+holdable = 0
+deflectFrames = 0
+
+[Guard]
+clip = Guard
+blendSeconds = 0.1
+startup = 4
+active = 1
+recovery = 6
+cancelFrom = 0
+isParry = 0
+postureDamage = 0
+unblockable = 0
+aiWeight = 0
+range = 0
+isDodge = 0
+moveSpeed = 0
+isGuard = 1
+holdable = 1
+deflectFrames = 0
+cancelTo = Parry, Dodge
 
