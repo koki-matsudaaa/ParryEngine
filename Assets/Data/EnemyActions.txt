@@ -16,6 +16,7 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 35
+isAttack = 1
 deflectClip = Deflected
 
 [EnemyQuick]
@@ -35,6 +36,7 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 20
+isAttack = 1
 
 [EnemyCombo1]
 clip = Slash
@@ -53,6 +55,7 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 8
+isAttack = 1
 nextAction = EnemyCombo2
 
 [EnemyCombo2]
@@ -72,6 +75,7 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 45
+isAttack = 1
 deflectClip = Deflected
 
 [EnemyDanger]
@@ -91,6 +95,7 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 0
+isAttack = 1
 
 [Flinch]
 clip = Deflected
@@ -109,4 +114,5 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 0
+isAttack = 0
 

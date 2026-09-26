@@ -11,6 +11,7 @@
 #include "Engine/Tools/ActionEditor.h"
 #include "Engine/Combat/AttackSelect.h"
 #include "Engine/Core/Transform.h"
+#include "Engine/Combat/Health.h"
 
 #include "imgui.h"
 
@@ -42,6 +43,7 @@ class GameApp : public Engine::Application
     Engine::ParrySystem m_parry;
     Engine::Posture m_playerPosture;
     Engine::Transform m_playerTf;
+    Engine::Health m_playerHealth;
 
     Engine::FbxModel m_enemy;
     Engine::ActionStateMachine m_enemyActions;
@@ -98,6 +100,9 @@ class GameApp : public Engine::Application
 
     BattleState m_state = BattleState::Fighting;
 
+    float m_executeStand = 1.1f;   // 決め技のとき敵から離れて立つ距離
+    float m_breakDamage = 50.0f;   // 崩壊で受ける体力ダメージ
+
 protected:
     bool OnStart() override
     {
@@ -108,6 +113,8 @@ protected:
         SetupCamera();
         SetupActions();
         LoadActionFiles();
+
+        m_playerHealth.SetMax(100.0f);
 
         m_enemyTf.position = XMFLOAT3(0.0f, 0.0f, kEnemyStartZ);
 
@@ -161,6 +168,8 @@ private:
         m_character.LoadClip("Dodge", "Assets/Model/Bot_Dodge.fbx", false);
         m_character.LoadClip("Guard", "Assets/Model/Bot_Guard.fbx");
         m_character.LoadClip("Execute", "Assets/Model/Bot_Execute.fbx", false);
+        m_character.LoadClip("Down", "Assets/Model/Bot_Down.fbx", false);
+        m_character.LoadClip("Hit", "Assets/Model/Bot_Deflected.fbx", false);
 
 
         m_character.Play("Idle");
@@ -251,6 +260,14 @@ private:
         deflected.active = 0;
         deflected.recovery = 25;
         m_enemyActions.AddAction(deflected);
+
+        // 被ダメージ
+        Engine::ActionData hit;
+        hit.name = "Hit";
+        hit.clipName = "Hit";
+        hit.blendSeconds = 0.05f;
+        hit.recovery = 22;
+        m_actions.AddAction(hit);
     }
 
     static void Apply(Engine::ActionStateMachine& sm,
@@ -314,6 +331,8 @@ private:
 
         m_state = BattleState::Fighting;
 
+        m_playerHealth.Reset();
+
         std::printf("リセット\n");
     }
 
@@ -348,9 +367,8 @@ private:
         const float len = std::sqrt(dx * dx + dz * dz);
         if (len < 0.01f) return;
 
-        const float stand = 1.1f;   // 敵からこれだけ離れて立つ
-        m_playerTf.position.x = m_enemyTf.position.x + dx / len * stand;
-        m_playerTf.position.z = m_enemyTf.position.z + dz / len * stand;
+        m_playerTf.position.x = m_enemyTf.position.x + dx / len * m_executeStand;
+        m_playerTf.position.z = m_enemyTf.position.z + dz / len * m_executeStand;
     }
 
     // モーションを止めるかどうか
@@ -659,27 +677,35 @@ protected:
             m_playerTrack.MarkEvent(Engine::TimelineEvent::Hit);
             m_enemyTrack.MarkEvent(Engine::TimelineEvent::Hit);
 
-            // 崩れたところに入ったか、それとも崩されたか
-            const bool wasBroken = m_playerPosture.IsBroken();
-
-            // この攻撃の威力を、攻撃側のアクションから引く
             float dmg = 20.0f;
             if (const auto* a = m_enemyActions.CurrentAction())
                 dmg = a->postureDamage;
 
-            if (wasBroken)
+            if (m_playerPosture.Add(dmg))
             {
+                // 体幹が崩れた。体力を大きく持っていかれて倒れる。
                 m_hitStop = 20;
-                m_state = BattleState::Lose;
-                std::printf("やられた\n");
-            }
-            else if (m_playerPosture.Add(dmg))
-            {
-                std::printf("被弾 → こちらの体幹崩壊!\n");
+
+                if (m_playerHealth.Damage(m_breakDamage))
+                {
+                    m_state = BattleState::Lose;
+                    std::printf("体幹崩壊 → 力尽きた\n");
+                }
+                else
+                {
+                    // 倒れている間は無敵。体幹は仕切り直す。
+                    m_actions.StartAction("Down");
+                    m_playerPosture.Reset();
+                    std::printf("体幹崩壊! (体力 %.0f / %.0f)\n",
+                        m_playerHealth.Value(), m_playerHealth.Max());
+                }
             }
             else
             {
-                std::printf("被弾  (自分の体幹 %.0f / %.0f)\n", m_playerPosture.Value(), m_playerPosture.Max());
+                m_actions.StartAction("Hit");
+
+                std::printf("被弾  (自分の体幹 %.0f / %.0f)\n",
+                    m_playerPosture.Value(), m_playerPosture.Max());
             }
             break;
         }
@@ -795,6 +821,25 @@ protected:
 
         GetRenderer().DrawModel(&m_character, m_playerTf.World(kCharacterScale));
         GetRenderer().DrawModel(&m_enemy, m_enemyTf.World(kCharacterScale));
+    }
+
+    // 体幹の調整項目
+    static void PostureGui(const char* id, Engine::Posture& p, bool showBreak)
+    {
+        ImGui::PushID(id);
+
+        float max = p.Max();
+        if (ImGui::SliderFloat("最大値", &max, 20.0f, 300.0f, "%.0f"))
+            p.SetMax(max);
+
+        ImGui::SliderFloat("自然回復", &p.regenPerFrame, 0.0f, 1.0f);
+        ImGui::SliderInt("回復までの待ち", &p.regenDelayFrames, 0, 180);
+
+        // 崩壊の長さは敵のみ
+        if (showBreak)
+            ImGui::SliderInt("崩壊の長さ", &p.breakFrames, 30, 300);
+
+        ImGui::PopID();
     }
 
     void OnGui() override
@@ -928,6 +973,11 @@ protected:
                     Engine::ToString(m_enemyActions.Phase()),
                     m_enemyActions.ElapsedFrames());
 
+                ImGui::Text("体力");
+                ImGui::ProgressBar(m_playerHealth.Ratio(), ImVec2(-1.0f, 0.0f));
+
+                ImGui::Separator();
+
                 ImGui::Separator();
                 ImGui::Text("体幹");
 
@@ -945,11 +995,14 @@ protected:
                 ImGui::SliderInt("弾き時の停止", &m_parry.hitStopOnParry, 0, 30);
                 ImGui::SliderInt("被弾時の停止", &m_parry.hitStopOnHit, 0, 30);
                 ImGui::SliderFloat("弾き1回の体幹", &m_parry.parryPostureDamage, 5.0f, 60.0f);
-                ImGui::SliderFloat("体幹の自然回復", &m_enemyPosture.regenPerFrame, 0.0f, 1.0f);
-                ImGui::SliderInt("回復までの待ち", &m_enemyPosture.regenDelayFrames, 0, 180);
-                ImGui::SliderInt("崩壊の長さ", &m_enemyPosture.breakFrames, 30, 300);
+                ImGui::SeparatorText("自分の体幹");
+                PostureGui("player", m_playerPosture, false);
+                ImGui::SeparatorText("敵の体幹");
+                PostureGui("enemy", m_enemyPosture, true);
                 ImGui::SliderInt("ガード時の停止", &m_parry.hitStopOnGuard, 0, 30);
                 ImGui::SliderFloat("ガードで通る割合", &m_parry.guardPostureRate, 0.0f, 1.0f);
+                ImGui::SliderFloat("崩壊で受ける体力", &m_breakDamage, 5.0f, 100.0f, "%.0f");
+                ImGui::SliderFloat("決め技の立ち位置", &m_executeStand, 0.5f, 2.5f, "%.2f m");
 
                 ImGui::Separator();
                 ImGui::Text("弾いた %d / 食らった %d / 斬った %d",

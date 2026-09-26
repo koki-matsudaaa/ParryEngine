@@ -16,6 +16,7 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 0
+isAttack = 1
 cancelTo = Parry, Slash
 
 [Parry]
@@ -35,6 +36,7 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 0
+isAttack = 0
 
 [Dodge]
 clip = Dodge
@@ -53,6 +55,7 @@ moveSpeed = 7
 isGuard = 0
 holdable = 0
 deflectFrames = 0
+isAttack = 0
 
 [Guard]
 clip = Guard
@@ -71,6 +74,7 @@ moveSpeed = 0
 isGuard = 1
 holdable = 1
 deflectFrames = 0
+isAttack = 0
 cancelTo = Parry, Dodge
 
 [Execute]
@@ -90,6 +94,7 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 0
+isAttack = 0
 
 [Down]
 clip = Down
@@ -108,4 +113,23 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 0
+isAttack = 0
 
+[Hit]
+clip = Hit
+blendSeconds = 0.05
+startup = 0
+active = 0
+recovery = 22
+cancelFrom = -1
+isAttack = 0
+isParry = 0
+postureDamage = 0
+unblockable = 0
+aiWeight = 0
+range = 0
+isDodge = 0
+moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 0

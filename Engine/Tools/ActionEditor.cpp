@@ -96,6 +96,8 @@ namespace Engine
                 ImGui::SliderInt("弾かれた隙", &a.deflectFrames, 0, 120);
                 ClipCombo("弾かれモーション", a.deflectClip, sm.GetAnimator());
 
+                ImGui::Checkbox("攻撃", &a.isAttack);
+                ImGui::SameLine();
                 ImGui::Checkbox("パリィ技", &a.isParry);
                 ImGui::SameLine();
                 ImGui::Checkbox("弾けない", &a.unblockable);
@@ -130,6 +132,7 @@ namespace Engine
             a.startup = 20;
             a.active = 5;
             a.recovery = 20;
+            a.isAttack = true;
             sm.AddAction(a);
             newName[0] = '\0';
         }

@@ -12,7 +12,7 @@ namespace Engine
         const ActionData* a = attacker.CurrentAction();
 
         // パリィ技の判定
-        if (!a || a->isParry) return ParryResult::None;
+        if (!a || !a->isAttack) return ParryResult::None;
 
         // 間合いの外なら空振り
         if (distance > a->range) return ParryResult::None;

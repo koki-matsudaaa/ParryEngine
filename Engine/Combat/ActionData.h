@@ -71,6 +71,8 @@ namespace Engine
         // はじかれたときの後隙
         int deflectFrames = 0;
 
+        bool isAttack = false;
+
         // 弾かれたときのモーション
         std::string deflectClip;
 
