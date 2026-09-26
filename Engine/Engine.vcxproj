@@ -58,6 +58,7 @@
     <ClInclude Include="Combat\ActionFile.h" />
     <ClInclude Include="Combat\ActionStateMachine.h" />
     <ClInclude Include="Combat\AttackSelect.h" />
+    <ClInclude Include="Combat\Health.h" />
     <ClInclude Include="Combat\ParrySystem.h" />
     <ClInclude Include="Combat\Posture.h" />
     <ClInclude Include="Core\Application.h" />

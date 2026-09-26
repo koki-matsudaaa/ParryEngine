@@ -21,6 +21,9 @@ namespace Engine
         // ダウン状態を解除して
         void Recover();
 
+        // 最初の状態に戻す
+        void Reset();
+
         // 調整パラメータ
         float regenPerFrame = 0.15f;   // 1フレームあたりの自然回復量
         int   regenDelayFrames = 60;   // 削られてから回復が始まるまで
