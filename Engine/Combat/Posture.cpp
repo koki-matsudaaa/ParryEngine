@@ -43,4 +43,12 @@ namespace Engine
         m_value = 0.0f;
         m_breakTimer = 0;
     }
+
+    void Posture::Reset()
+    {
+        m_value = 0.0f;
+        m_sinceDamage = 0;
+        m_breakTimer = 0;
+        m_broken = false;
+    }
 }

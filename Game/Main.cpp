@@ -22,10 +22,14 @@
 using namespace DirectX;
 using Engine::ActionPhase;
 
+enum class BattleState { Fighting, Win, Lose };
+
 class GameApp : public Engine::Application
 {
     static constexpr float kCharacterScale = 0.01f;
     static constexpr float kTerrainScale = 1.0f;
+    static constexpr float kEnemyStartZ = 3.0f;   // 敵の初期位置
+
     static constexpr const char* kPlayerActionFile = "Assets/Data/PlayerActions.txt";
     static constexpr const char* kEnemyActionFile = "Assets/Data/EnemyActions.txt";
 
@@ -92,6 +96,8 @@ class GameApp : public Engine::Application
     bool m_prevDodge = false;
     XMFLOAT3 m_actionMove{ 0.0f, 0.0f, 0.0f };   // アクション中に進む向き
 
+    BattleState m_state = BattleState::Fighting;
+
 protected:
     bool OnStart() override
     {
@@ -103,7 +109,7 @@ protected:
         SetupActions();
         LoadActionFiles();
 
-        m_enemyTf.position = XMFLOAT3(0.0f, 0.0f, 1.5f);
+        m_enemyTf.position = XMFLOAT3(0.0f, 0.0f, kEnemyStartZ);
 
         // 履歴をためる
         m_playerTrack.SetCapacity(240);
@@ -154,6 +160,7 @@ private:
         m_character.LoadClip("RunBack", "Assets/Model/Bot_RunBack.fbx");
         m_character.LoadClip("Dodge", "Assets/Model/Bot_Dodge.fbx", false);
         m_character.LoadClip("Guard", "Assets/Model/Bot_Guard.fbx");
+        m_character.LoadClip("Execute", "Assets/Model/Bot_Execute.fbx", false);
 
 
         m_character.Play("Idle");
@@ -174,6 +181,7 @@ private:
         m_enemy.LoadClip("Slash3", "Assets/Model/Bot_Slash3.fbx", false);
         m_enemy.LoadClip("Thrust", "Assets/Model/Bot_Thrust.fbx", false);
         m_enemy.LoadClip("Heavy", "Assets/Model/Bot_Heavy.fbx", false);
+        m_enemy.LoadClip("Death", "Assets/Model/Bot_Death.fbx", false);
         m_enemy.Play("Idle");
 
         return true;
@@ -275,6 +283,40 @@ private:
         std::printf("アクションを保存しました\n");
     }
 
+    // 最初の状態に戻す
+    void ResetBattle()
+    {
+        m_playerTf = Engine::Transform{};
+        m_enemyTf = Engine::Transform{};
+        m_enemyTf.position = XMFLOAT3(0.0f, 0.0f, kEnemyStartZ);
+
+        m_actions.Cancel();
+        m_enemyActions.Cancel();
+        m_input.Clear();
+
+        m_playerPosture.Reset();
+        m_enemyPosture.Reset();
+
+        m_character.Play("Idle", 0.1f);
+        m_enemy.Play("Idle", 0.1f);
+
+        m_hitStop = 0;
+        m_enemyTimer = m_enemyInterval;
+        m_enemyChasing = false;
+
+        m_parryCount = 0;
+        m_hitCount = 0;
+        m_enemyHitCount = 0;
+        m_lastParryOffset = -1;
+
+        m_playerTrack.Clear();
+        m_enemyTrack.Clear();
+
+        m_state = BattleState::Fighting;
+
+        std::printf("リセット\n");
+    }
+
     // プレイヤーから見た敵の方向
     float YawToEnemy() const
     {
@@ -289,6 +331,26 @@ private:
         const float dx = m_enemyTf.position.x - m_playerTf.position.x;
         const float dz = m_enemyTf.position.z - m_playerTf.position.z;
         return std::sqrt(dx * dx + dz * dz);
+    }
+
+    // とどめが届く距離
+    float ExecuteRange() const
+    {
+        const auto* a = m_actions.Find("Execute");
+        return a ? a->range : 1.6f;
+    }
+
+    // とどめ位置合わせ
+    void SnapToExecutePosition()
+    {
+        const float dx = m_playerTf.position.x - m_enemyTf.position.x;
+        const float dz = m_playerTf.position.z - m_enemyTf.position.z;
+        const float len = std::sqrt(dx * dx + dz * dz);
+        if (len < 0.01f) return;
+
+        const float stand = 1.1f;   // 敵からこれだけ離れて立つ
+        m_playerTf.position.x = m_enemyTf.position.x + dx / len * stand;
+        m_playerTf.position.z = m_enemyTf.position.z + dz / len * stand;
     }
 
     // モーションを止めるかどうか
@@ -460,6 +522,9 @@ protected:
                 + (m_lockPitch - m_camera.GetPitch()) * rate);
         }
 
+        // とどめで戦闘を止める
+        if (m_state != BattleState::Fighting) return;
+
         // 入力
         const bool attackHeld = (GetAsyncKeyState('Z') & 0x8000) != 0;
         if (attackHeld && !m_prevAttack) m_input.Push("Attack");
@@ -488,7 +553,16 @@ protected:
         }
 
         // 行動の発動
-        if (m_input.Has("Dodge") && m_actions.CanCancelInto("Dodge"))
+        const bool canExecute = m_enemyPosture.IsBroken() && DistanceToEnemy() <= ExecuteRange();
+
+        if (m_input.Has("Attack") && canExecute && m_actions.IsIdle())
+        {
+            m_input.Consume("Attack");
+            m_playerTf.yaw = YawToEnemy();
+            SnapToExecutePosition();
+            m_actions.StartAction("Execute");
+        }
+        else if (m_input.Has("Dodge") && m_actions.CanCancelInto("Dodge"))
         {
             m_input.Consume("Dodge");
             SetDodgeDirection();          // 向きは技を出す前に決める
@@ -585,16 +659,28 @@ protected:
             m_playerTrack.MarkEvent(Engine::TimelineEvent::Hit);
             m_enemyTrack.MarkEvent(Engine::TimelineEvent::Hit);
 
+            // 崩れたところに入ったか、それとも崩されたか
+            const bool wasBroken = m_playerPosture.IsBroken();
+
             // この攻撃の威力を、攻撃側のアクションから引く
             float dmg = 20.0f;
             if (const auto* a = m_enemyActions.CurrentAction())
                 dmg = a->postureDamage;
 
-            if (m_playerPosture.Add(dmg))
+            if (wasBroken)
+            {
+                m_hitStop = 20;
+                m_state = BattleState::Lose;
+                std::printf("やられた\n");
+            }
+            else if (m_playerPosture.Add(dmg))
+            {
                 std::printf("被弾 → こちらの体幹崩壊!\n");
+            }
             else
-                std::printf("被弾  (自分の体幹 %.0f / %.0f)\n",
-                    m_playerPosture.Value(), m_playerPosture.Max());
+            {
+                std::printf("被弾  (自分の体幹 %.0f / %.0f)\n", m_playerPosture.Value(), m_playerPosture.Max());
+            }
             break;
         }
         case Engine::ParryResult::Guarded:
@@ -662,6 +748,15 @@ protected:
             break;
         }
 
+        // 決め技が入った
+        if (m_actions.CurrentActionName() == "Execute" && m_actions.JustBecameActive())
+        {
+            m_enemyActions.Cancel();
+            m_enemy.Play("Death", 0.1f);
+            m_hitStop = 20;
+            m_state = BattleState::Win;
+            std::printf("決めた!\n");
+        }
     }
 
     void OnRender(float alpha) override
@@ -711,11 +806,35 @@ protected:
             if (ImGui::IsKeyPressed(ImGuiKey_F1, false))
                 m_showTools = !m_showTools;
 
+            if (ImGui::IsKeyPressed(ImGuiKey_R, false))
+                ResetBattle();
+
             if (ImGui::IsKeyPressed(ImGuiKey_Space, false))
                 clock.SetPaused(!clock.IsPaused());
 
             if (clock.IsPaused() && ImGui::IsKeyPressed(ImGuiKey_N, true))
                 clock.RequestSingleStep();
+        }
+
+        if (m_state != BattleState::Fighting)
+        {
+            const ImVec2 s = ImGui::GetMainViewport()->Size;
+            ImGui::SetNextWindowPos(ImVec2(s.x * 0.5f, s.y * 0.35f),
+                ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+            ImGui::Begin("結果", nullptr,
+                ImGuiWindowFlags_NoTitleBar |
+                ImGuiWindowFlags_AlwaysAutoResize |
+                ImGuiWindowFlags_NoMove |
+                ImGuiWindowFlags_NoSavedSettings);
+
+            ImGui::SetWindowFontScale(2.0f);
+            ImGui::Text(m_state == BattleState::Win ? "勝利" : "敗北");
+            ImGui::SetWindowFontScale(1.0f);
+
+            if (ImGui::Button("もう一度 (R)")) ResetBattle();
+
+            ImGui::End();
         }
 
         if (!m_showTools) return;
@@ -735,7 +854,7 @@ protected:
         ImGui::SameLine();
         ImGui::TextDisabled("F1 で表示切替");
 
-        ImGui::TextDisabled("WASD 移動 / Z 攻撃 / X ガード / C パリィ / Shift 回避 / Q ロック");
+        ImGui::TextDisabled("WASD 移動 / Z 攻撃 / X ガード / C パリィ / Shift 回避 / Q ロック / R やり直し");
         ImGui::Separator();
 
         if (ImGui::BeginTabBar("tabs"))
@@ -799,6 +918,9 @@ protected:
 
             if (ImGui::BeginTabItem("戦闘"))
             {
+                if (ImGui::Button("最初から (R)")) ResetBattle();
+                ImGui::Separator();
+
                 // 今の進行状況
                 ImGui::Text("自分 : %s   %d F",
                     Engine::ToString(m_actions.Phase()), m_actions.ElapsedFrames());

@@ -73,3 +73,39 @@ holdable = 1
 deflectFrames = 0
 cancelTo = Parry, Dodge
 
+[Execute]
+clip = Execute
+blendSeconds = 0.1
+startup = 20
+active = 1
+recovery = 40
+cancelFrom = -1
+isParry = 0
+postureDamage = 0
+unblockable = 0
+aiWeight = 0
+range = 1.6
+isDodge = 0
+moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 0
+
+[Down]
+clip = Down
+blendSeconds = 0.1
+startup = 0
+active = 90
+recovery = 30
+cancelFrom = -1
+isParry = 0
+postureDamage = 0
+unblockable = 0
+aiWeight = 0
+range = 0
+isDodge = 1
+moveSpeed = 0
+isGuard = 0
+holdable = 0
+deflectFrames = 0
+
