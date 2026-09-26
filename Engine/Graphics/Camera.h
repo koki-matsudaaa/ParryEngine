@@ -3,23 +3,16 @@
 
 namespace Engine
 {
-    // ────────────────────────────────────────────────────────────
-    // 注視点のまわりを回り込むカメラ。
-    //
-    // 対象の足元の座標を渡すと、その周囲を yaw / pitch / 距離 で回る。
-    // ロックオン中のボスを見る、という使い方も同じ仕組みで足りる。
-    // ────────────────────────────────────────────────────────────
     class Camera
     {
     public:
-        // 見る対象の座標 (足元)。
+        // 見る対象の座標
         void SetTarget(const DirectX::XMFLOAT3& t) { m_target = t; }
 
         // 水平方向の回り込み。
         void AddYaw(float radians) { m_yaw += radians; }
 
-        // 見下ろし角。上下は行き過ぎないよう頭打ちにする
-        // (真上や真下に回り込むと、上方向ベクトルが破綻するため)。
+        // 見下ろし角。
         void AddPitch(float radians);
 
         void  SetDistance(float d) { m_distance = d; }
@@ -28,21 +21,29 @@ namespace Engine
         // 移動をカメラ基準にするとき、ゲーム側がこの角度を読む。
         float GetYaw() const { return m_yaw; }
 
+        void  SetPitch(float radians);
+        float GetPitch() const { return m_pitch; }
+
+        // 実際に見ている点
+        DirectX::XMFLOAT3 LookPoint() const;
+
         DirectX::XMFLOAT3 Eye() const;
         DirectX::XMMATRIX View() const;
         DirectX::XMMATRIX Projection() const;
 
-        // ── 調整パラメータ (1 unit = 1m) ──
+        // --- 調整パラメータ ---
         float fovY = DirectX::XM_PIDIV4;
         float aspect = 1280.0f / 720.0f;
         float nearZ = 0.1f;
         float farZ = 500.0f;
 
-        // 注視点を足元からどれだけ上げるか。胸のあたりを見る。
+        // 注視点を足元からどれだけ上げるか。
         float lookHeight = 1.2f;
 
         float minPitch = -0.20f;   // これ以上見上げない
         float maxPitch = 1.20f;    // これ以上見下ろさない
+
+        float sideOffset = 0.0f;
 
     private:
         DirectX::XMFLOAT3 m_target{ 0.0f, 0.0f, 0.0f };

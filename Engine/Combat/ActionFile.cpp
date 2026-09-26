@@ -57,6 +57,14 @@ namespace Engine
             f << "postureDamage = " << a.postureDamage << "\n";
             f << "unblockable = " << (a.unblockable ? 1 : 0) << "\n";
             f << "aiWeight = " << a.aiWeight << "\n";
+            f << "range = " << a.range << "\n";
+            f << "isDodge = " << (a.isDodge ? 1 : 0) << "\n";
+            f << "moveSpeed = " << a.moveSpeed << "\n";
+            f << "isGuard = " << (a.isGuard ? 1 : 0) << "\n";
+            f << "holdable = " << (a.holdable ? 1 : 0) << "\n";
+            f << "deflectFrames = " << a.deflectFrames << "\n";
+            if (!a.deflectClip.empty())
+                f << "deflectClip = " << a.deflectClip << "\n";
             if (!a.nextAction.empty())
                 f << "nextAction = " << a.nextAction << "\n";
 
@@ -122,6 +130,13 @@ namespace Engine
                 else if (key == "unblockable")   a.unblockable = (std::stoi(val) != 0);
                 else if (key == "aiWeight")      a.aiWeight = std::stoi(val);
                 else if (key == "nextAction")    a.nextAction = val;
+                else if (key == "range")         a.range = std::stof(val);
+                else if (key == "isDodge")       a.isDodge = (std::stoi(val) != 0);
+                else if (key == "moveSpeed")     a.moveSpeed = std::stof(val);
+                else if (key == "isGuard")       a.isGuard = (std::stoi(val) != 0);
+                else if (key == "holdable")      a.holdable = (std::stoi(val) != 0);
+                else if (key == "deflectFrames") a.deflectFrames = std::stoi(val);
+                else if (key == "deflectClip")   a.deflectClip = val;
             }
             catch (...)
             {

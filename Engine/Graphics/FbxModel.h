@@ -19,8 +19,8 @@ namespace Engine
             XMFLOAT3 position;
             XMFLOAT3 normal;
             XMFLOAT2 uv;
-            uint32_t boneIndex[4] = { 0,0,0,0 };   // 影響するボーン番号 (最大4)
-            float    boneWeight[4] = { 0,0,0,0 };  // その重み (合計1になる)
+            uint32_t boneIndex[4] = { 0,0,0,0 };   // 影響するボーン番号
+            float    boneWeight[4] = { 0,0,0,0 };  // その重み (合計1)
         };
 
         // ボーン１本分の情報
@@ -33,19 +33,21 @@ namespace Engine
         FbxModel() = default;
         ~FbxModel() = default;
 
+        // 指定した名前のメッシュだけを読む　複数のモデルが入っている時
+        void SetMeshFilter(const std::string& meshName) { m_meshFilter = meshName; }
+
         // FBXを読み込み、GPUリソースを構築する。
-        // メッシュ・スケルトンに加え、アニメが入っていれば1本クリップとして登録する。
         bool Load(const std::string& path,
             const std::string& texturePath = "",
             const std::string& defaultClipName = "Default");
 
-        // 別のFBXからモーションだけを読み、クリップとして追加する。
+        // 別のFBXからモーションだけを読み、クリップとして追加
         bool LoadClip(const std::string& name, const std::string& path, bool loop = true);
 
-        // 描画コマンドを積む (IRenderable)。
+        // 描画コマンドを積む
         void Draw(ID3D12GraphicsCommandList* cmdList) override;
 
-        // ── モーション再生 (Animator へ委譲) ──────────────
+        // モーション再生
         bool Play(const std::string& name, float blendSeconds = 0.0f)
         {
             return m_animator.Play(name, blendSeconds);
@@ -75,7 +77,7 @@ namespace Engine
         // 再生を細かく制御したいとき (状態遷移など) は直接触る。
         Animator& GetAnimator() { return m_animator; }
 
-        // ボーン数 (定数バッファのサイズ決めに使う)。
+        // ボーン数 (定数バッファのサイズ決めに仕様)
         size_t GetBoneCount() const { return m_bones.size(); }
 
         // IRenderable として、今のポーズを描画側へ渡す。
@@ -108,8 +110,7 @@ namespace Engine
         const std::vector<unsigned int>& GetIndices() const { return m_indices; }
 
     private:
-        // FbxManager は SDK 全体で1つあれば足りるので static 共有する。
-        // 初回ロード時に作られ、以降使い回す。
+        // FbxManager は SDK 全体で1つあれば足りるので static 共有
         static FbxManager* GetSharedManager();
 
         // 1つのメッシュから頂点(位置)とインデックスを取り出して詰める。
@@ -142,7 +143,8 @@ namespace Engine
         // アニメーションを一定間隔で焼き込む。
         bool BakeClip(FbxScene* scene, AnimationClip& clip);
 
-        std::string m_path;   // 読み込み元のパス。ログでどのモデルか分かるように
+        std::string m_path;   // 読み込み元のパス
+        std::string m_meshFilter;
 
         std::vector<FbxVtx>        m_vertices; // 全メッシュ分をまとめて持つ
         std::vector<unsigned int>  m_indices;

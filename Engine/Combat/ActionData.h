@@ -53,6 +53,27 @@ namespace Engine
         // 敵攻撃の選択の重み
         int aiWeight = 0;
 
+        // 攻撃が届く距離
+        float range = 2.0f;
+
+        // 回避
+        bool isDodge = false;
+
+        // 回避の速さ　距離にかかわる
+        float moveSpeed = 0.0f;
+
+        // ガード
+        bool isGuard = false;
+
+        // キーホールド
+        bool holdable = false;
+
+        // はじかれたときの後隙
+        int deflectFrames = 0;
+
+        // 弾かれたときのモーション
+        std::string deflectClip;
+
         int TotalFrames() const { return startup + active + recovery; }
     };
 }

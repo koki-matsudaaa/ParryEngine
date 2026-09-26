@@ -46,10 +46,32 @@ namespace Engine
                 ImGui::TextDisabled("空 = 何にでも移れる");
             ImGui::TreePop();
         }
+
+        // 再生するモーションを選ぶ
+        void ClipCombo(const char* label, std::string& target, const Animator* anim)
+        {
+            const char* preview = target.empty() ? "(なし)" : target.c_str();
+            if (!ImGui::BeginCombo(label, preview)) return;
+
+            if (ImGui::Selectable("(なし)", target.empty()))
+                target.clear();
+
+            if (anim)
+            {
+                for (size_t i = 0; i < anim->ClipCount(); i++)
+                {
+                    const std::string& n = anim->ClipName(i);
+                    if (ImGui::Selectable(n.c_str(), target == n))
+                        target = n;
+                }
+            }
+            ImGui::EndCombo();
+        }
     }
 
     void DrawActionEditor(ActionStateMachine& sm, float ppf)
     {
+        ImGui::PushID(&sm);
         auto& all = sm.Actions();
 
         for (auto& a : all)
@@ -63,16 +85,28 @@ namespace Engine
 
             if (open)
             {
-                ImGui::SliderInt("発生", &a.startup, 0, 60);
+                ClipCombo("モーション", a.clipName, sm.GetAnimator());
+                ImGui::SliderInt("発生", &a.startup, 0, 150);
                 ImGui::SliderInt("判定", &a.active, 0, 60);
                 ImGui::SliderInt("硬直", &a.recovery, 0, 90);
                 ImGui::SliderInt("キャンセル", &a.cancelFrom, -1, 90);
                 ImGui::SliderFloat("体幹削り", &a.postureDamage, 0.0f, 100.0f, "%.0f");
                 ImGui::SliderInt("AIの重み", &a.aiWeight, 0, 10);
+                ImGui::SliderFloat("届く距離", &a.range, 0.5f, 5.0f, "%.1f m");
+                ImGui::SliderInt("弾かれた隙", &a.deflectFrames, 0, 120);
+                ClipCombo("弾かれモーション", a.deflectClip, sm.GetAnimator());
 
                 ImGui::Checkbox("パリィ技", &a.isParry);
                 ImGui::SameLine();
                 ImGui::Checkbox("弾けない", &a.unblockable);
+                ImGui::SameLine();
+                ImGui::Checkbox("回避技", &a.isDodge);
+
+                ImGui::Checkbox("ガード技", &a.isGuard);
+                ImGui::SameLine();
+                ImGui::Checkbox("ホールド", &a.holdable);
+
+                ImGui::SliderFloat("移動速度", &a.moveSpeed, 0.0f, 12.0f, "%.1f m/s");
 
                 NextActionCombo(a, all);
                 CancelToTree(a, all);
@@ -83,5 +117,22 @@ namespace Engine
             }
             ImGui::PopID();
         }
+
+        ImGui::Separator();
+
+        static char newName[32] = "";
+        ImGui::InputText("新しい技の名前", newName, sizeof(newName));
+        ImGui::SameLine();
+        if (ImGui::Button("追加") && newName[0] != '\0')
+        {
+            ActionData a;
+            a.name = newName;
+            a.startup = 20;
+            a.active = 5;
+            a.recovery = 20;
+            sm.AddAction(a);
+            newName[0] = '\0';
+        }
+        ImGui::PopID();
     }
 }

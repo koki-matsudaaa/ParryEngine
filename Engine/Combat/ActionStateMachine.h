@@ -14,6 +14,9 @@ namespace Engine
         // アニメの再生先
         void SetAnimator(Animator* animator) { m_animator = animator; }
 
+        // 登録されたモーションの一覧
+        const Animator* GetAnimator() const { return m_animator; }
+
         // アクションを登録
         void AddAction(const ActionData& action);
 
@@ -47,6 +50,20 @@ namespace Engine
         // 今パリィ受付中か
         bool OnParry() const;
 
+        // 今無敵中か
+        bool IsInvincible() const;
+
+        // ホールド
+        void SetHold(bool held) { m_hold = held; }
+
+        // 今ガード中か
+        bool IsGuarding() const;
+
+        // frames 分止める
+        void AddStagger(int frames);
+
+        int Stagger() const { return m_stagger; }
+
         // 登録されているアクションを名前で引く。
         const ActionData* Find(const std::string& name) const;
 
@@ -67,5 +84,9 @@ namespace Engine
 
         // 直前フレームの段階保持
         ActionPhase m_prevPhase = ActionPhase::None;
+
+        bool m_hold = false;
+
+        int m_stagger = 0;
     };
 }

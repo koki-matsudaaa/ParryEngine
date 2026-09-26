@@ -31,6 +31,8 @@ namespace Engine
         const std::string& CurrentClipName() const;
         float  CurrentTime() const { return m_time; }
         size_t ClipCount() const { return m_clips.size(); }
+        // 登録されたクリップの名前
+        const std::string& ClipName(size_t index) const;
         int    CurrentFrameCount() const;
 
         bool SetClipLoop(const std::string& name, bool loop);
@@ -53,7 +55,7 @@ namespace Engine
         int   m_currentClip = -1;   // 再生中
         float m_time = 0.0f;        // 現在の再生時刻
 
-        // ── クロスフェード ──
+        // --- クロスフェード ---
         int   m_prevClip = -1;        // 切り替え元
         float m_prevTime = 0.0f;
         float m_blendTime = 0.0f;     // ブレンド開始からの経過秒

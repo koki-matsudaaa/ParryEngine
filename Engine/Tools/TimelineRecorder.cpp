@@ -31,6 +31,7 @@ namespace Engine
         FrameRecord r;
         r.phase = sm.Phase();
         r.isParry = sm.OnParry();
+        r.isGuard = sm.IsGuarding();
 
         m_frames[m_head] = r;
         m_events[m_head] = TimelineEvent::None;   // 前周の印を消す
