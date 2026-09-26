@@ -4,13 +4,6 @@
 
 namespace Engine
 {
-    // ────────────────────────────────────────────────────────────
-    // ルートシグネチャと、頂点構造ごとのパイプラインステートを持つ。
-    //
-    // モデルは「自分はどの種別か」を答えるだけでよく (IRenderable)、
-    // 実際の PSO の実体はここに集約されている。
-    // 描画側は種別を見て Get() するだけで切り替えられる。
-    // ────────────────────────────────────────────────────────────
     class PipelineCache
     {
     public:
@@ -20,27 +13,31 @@ namespace Engine
         PipelineCache(const PipelineCache&) = delete;
         PipelineCache& operator=(const PipelineCache&) = delete;
 
-        // シェーダをコンパイルし、ルートシグネチャと PSO を作る。
+        // シェーダをコンパイルし、ルートシグネチャと PSO を作る
         bool Initialize();
         void Shutdown();
 
-        // 全パイプライン共通のルートシグネチャ。
-        //   b0 : シーン定数 (view / proj / eye)
-        //   b2 : オブジェクト定数 (world)
+        //   b0 : シーン定数
+        //   b2 : オブジェクト定数
         //   t0 : テクスチャ
-        //   b3 : ボーン行列 (スキニング用)
+        //   b3 : ボーン行列
         ID3D12RootSignature* RootSignature() const { return m_rootSignature; }
 
-        // 種別に対応する PSO。未対応なら nullptr。
+        // 種別に対応するPSO
         ID3D12PipelineState* Get(PipelineType type) const;
+
+        // 線を描くための PSO。当たり判定の可視化に使う。
+        ID3D12PipelineState* LinePso() const { return m_linePso; }
 
     private:
         bool CreateRootSignature();
         bool CreateStaticPipeline();
         bool CreateSkeletalPipeline();
+        bool CreateLinePipeline();
 
         ID3D12RootSignature* m_rootSignature = nullptr;
         ID3D12PipelineState* m_staticPso = nullptr;
         ID3D12PipelineState* m_skeletalPso = nullptr;
+        ID3D12PipelineState* m_linePso = nullptr;
     };
 }

@@ -122,7 +122,6 @@ startup = 0
 active = 0
 recovery = 22
 cancelFrom = -1
-isAttack = 0
 isParry = 0
 postureDamage = 0
 unblockable = 0
@@ -133,3 +132,5 @@ moveSpeed = 0
 isGuard = 0
 holdable = 0
 deflectFrames = 0
+isAttack = 0
+

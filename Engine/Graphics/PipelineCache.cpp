@@ -79,13 +79,16 @@ namespace Engine
 
     bool PipelineCache::Initialize()
     {
-        if (!CreateRootSignature())    
+        if (!CreateRootSignature())
             return false;
 
-        if (!CreateStaticPipeline())   
+        if (!CreateStaticPipeline())
             return false;
 
-        if (!CreateSkeletalPipeline()) 
+        if (!CreateSkeletalPipeline())
+            return false;
+
+        if (!CreateLinePipeline())
             return false;
 
         return true;
@@ -96,6 +99,7 @@ namespace Engine
         if (m_skeletalPso) { m_skeletalPso->Release(); m_skeletalPso = nullptr; }
         if (m_staticPso) { m_staticPso->Release();     m_staticPso = nullptr; }
         if (m_rootSignature) { m_rootSignature->Release(); m_rootSignature = nullptr; }
+        if (m_linePso) { m_linePso->Release(); m_linePso = nullptr; }
     }
 
     ID3D12PipelineState* PipelineCache::Get(PipelineType type) const
@@ -278,6 +282,57 @@ namespace Engine
         ps->Release();
 
         if (FAILED(hr)) OutputDebugStringA("skeletal PSO creation failed\n");
+        return SUCCEEDED(hr);
+    }
+
+    bool PipelineCache::CreateLinePipeline()
+    {
+        ID3DBlob* vs = nullptr;
+        ID3DBlob* ps = nullptr;
+
+        if (!CompileShader(L"Engine/Graphics/Shaders/DebugVertexShader.hlsl",
+            "DebugVS", "vs_5_0", &vs))
+            return false;
+
+        if (!CompileShader(L"Engine/Graphics/Shaders/DebugPixelShader.hlsl",
+            "DebugPS", "ps_5_0", &ps))
+        {
+            vs->Release();
+            return false;
+        }
+
+        // 位置と色だけ
+        D3D12_INPUT_ELEMENT_DESC layout[] = {
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "COLOR",    0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+              D3D12_APPEND_ALIGNED_ELEMENT,
+              D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+        };
+
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc = MakeBaseDesc();
+        desc.VS.pShaderBytecode = vs->GetBufferPointer();
+        desc.VS.BytecodeLength = vs->GetBufferSize();
+        desc.PS.pShaderBytecode = ps->GetBufferPointer();
+        desc.PS.BytecodeLength = ps->GetBufferSize();
+        desc.InputLayout.pInputElementDescs = layout;
+        desc.InputLayout.NumElements = _countof(layout);
+        desc.pRootSignature = m_rootSignature;
+
+        // 三角形ではなく線として描く
+        desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+
+        // 深度は見るが書き込まない。線が他の描画を隠さないように。
+        desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+
+        HRESULT hr = _dev->CreateGraphicsPipelineState(&desc,
+            IID_PPV_ARGS(&m_linePso));
+
+        vs->Release();
+        ps->Release();
+
+        if (FAILED(hr)) OutputDebugStringA("line PSO creation failed\n");
         return SUCCEEDED(hr);
     }
 }

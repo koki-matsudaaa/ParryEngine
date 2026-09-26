@@ -59,7 +59,7 @@ namespace Engine
         if (FAILED(CreateFinalRenderTarget(m_rtvHeap, m_backBuffers))) 
             return false;
 
-        // ── 深度バッファ ──────────────────────────
+        // --- 深度バッファ ---
         D3D12_RESOURCE_DESC depthResDesc = {};
         depthResDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
         depthResDesc.Width = window_width;
@@ -105,14 +105,14 @@ namespace Engine
         _dev->CreateDepthStencilView(m_depthBuffer, &dsvDesc,
             m_dsvHeap->GetCPUDescriptorHandleForHeapStart());
 
-        // ── フェンス (CPU が GPU の完了を待つための仕組み) ──
+        // --- フェンス ---
         if (FAILED(_dev->CreateFence(m_fenceVal, D3D12_FENCE_FLAG_NONE,
             IID_PPV_ARGS(&m_fence))))
         {
             return false;
         }
 
-        // ── 拡張子ごとのテクスチャ読み込み方を登録 ──
+        // --- 拡張子ごとのテクスチャ読み込み方を登録 ---
         // Dx12Context の LoadTextureFromFile がこの表を引く。
         loadLambdaTable["sph"] =
         loadLambdaTable["spa"] =
@@ -139,7 +139,7 @@ namespace Engine
                     DirectX::DDS_FLAGS_NONE, meta, img);
             };
 
-        // ── ビューポートとシザー矩形 ──────────────────
+        // --- ビューポートとシザー矩形 ---
         m_viewport.Width = static_cast<float>(window_width);
         m_viewport.Height = static_cast<float>(window_height);
         m_viewport.TopLeftX = 0.0f;
@@ -152,9 +152,11 @@ namespace Engine
         m_scissor.right = static_cast<LONG>(window_width);
         m_scissor.bottom = static_cast<LONG>(window_height);
 
-        // ── シェーダとパイプライン ──────────────────
+        // --- シェーダとパイプライン ---
         if (!m_pipelines.Initialize()) 
             return false;
+
+        m_debug.Initialize(m_pipelines.LinePso());
 
         if (!CreateConstantBuffers()) 
             return false;
@@ -239,6 +241,17 @@ namespace Engine
         // 次のフレームのためにコマンドを積み直せる状態へ戻す
         _cmdAllocator->Reset();
         _cmdList->Reset(_cmdAllocator, nullptr);
+    }
+
+    void Renderer::FlushDebug()
+    {
+        // カメラだけ渡す
+        _cmdList->SetGraphicsRootSignature(m_pipelines.RootSignature());
+        _cmdList->SetGraphicsRootConstantBufferView(
+            0, m_sceneCB->GetGPUVirtualAddress());
+
+        m_debug.Flush(_cmdList);
+        m_debug.Clear();
     }
 
     void Renderer::WaitForGpu()

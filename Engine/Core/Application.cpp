@@ -79,6 +79,7 @@ namespace Engine
 
             m_renderer.BeginFrame(m_clearColor);
             OnRender(m_clock.Alpha());
+            m_renderer.FlushDebug();
 
             // 重ねて描くので、OnRenderの後
             m_imgui.NewFrame();

@@ -67,6 +67,7 @@
     <ClInclude Include="Core\pch.h" />
     <ClInclude Include="Core\Transform.h" />
     <ClInclude Include="Graphics\Camera.h" />
+    <ClInclude Include="Graphics\DebugDraw.h" />
     <ClInclude Include="Graphics\FbxModel.h" />
     <ClInclude Include="Graphics\IRenderable.h" />
     <ClInclude Include="Graphics\PipelineCache.h" />
@@ -95,6 +96,7 @@
     <ClCompile Include="Core\FixedTimestep.cpp" />
     <ClCompile Include="Core\pch.cpp" />
     <ClCompile Include="Graphics\Camera.cpp" />
+    <ClCompile Include="Graphics\DebugDraw.cpp" />
     <ClCompile Include="Graphics\FbxModel.cpp" />
     <ClCompile Include="Graphics\IRenderable.cpp" />
     <ClCompile Include="Graphics\PipelineCache.cpp" />
@@ -104,6 +106,20 @@
     <ClCompile Include="Tools\ImguiLayer.cpp" />
     <ClCompile Include="Tools\Timeline.cpp" />
     <ClCompile Include="Tools\TimelineRecorder.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Graphics\Shaders\DebugPixelShader.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">DebugPS</EntryPointName>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">DebugPS</EntryPointName>
+    </FxCompile>
+    <FxCompile Include="Graphics\Shaders\DebugVertexShader.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">DebugVS</EntryPointName>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">DebugVS</EntryPointName>
+    </FxCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

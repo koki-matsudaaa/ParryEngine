@@ -103,6 +103,8 @@ class GameApp : public Engine::Application
     float m_executeStand = 1.1f;   // 決め技のとき敵から離れて立つ距離
     float m_breakDamage = 50.0f;   // 崩壊で受ける体力ダメージ
 
+    bool m_showHitbox = true;   // 当たり判定の表示
+
 protected:
     bool OnStart() override
     {
@@ -785,6 +787,50 @@ protected:
         }
     }
 
+    // 攻撃が届く範囲
+    static void DrawAttackRange(Engine::DebugDraw& dbg, const Engine::Transform& tf, const Engine::ActionStateMachine& sm)
+    {
+        const auto* a = sm.CurrentAction();
+        if (!a || !a->isAttack) return;
+
+        const bool active = (sm.Phase() == ActionPhase::Active);
+        const XMFLOAT3 color = active
+            ? XMFLOAT3(1.0f, 0.2f, 0.2f)      // 判定中
+            : XMFLOAT3(0.4f, 0.15f, 0.15f);   // 発生・硬直中
+
+        const XMFLOAT3 c(tf.position.x, tf.position.y + 0.05f, tf.position.z);
+        dbg.Circle(c, a->range, 2, color);
+    }
+
+    // 体の位置
+    static void DrawBody(Engine::DebugDraw& dbg,
+        const Engine::Transform& tf,
+        const Engine::ActionStateMachine& sm)
+    {
+        XMFLOAT3 color(0.5f, 0.5f, 0.5f);                            // 何もしていない
+        if (sm.OnParry())           color = XMFLOAT3(0.2f, 1.0f, 0.5f);  // パリィ受付
+        else if (sm.IsInvincible()) color = XMFLOAT3(0.3f, 0.5f, 1.0f);  // 無敵
+        else if (sm.IsGuarding())   color = XMFLOAT3(0.9f, 0.9f, 0.9f);  // ガード
+
+        dbg.Capsule(
+            XMFLOAT3(tf.position.x, tf.position.y + 0.35f, tf.position.z),
+            XMFLOAT3(tf.position.x, tf.position.y + 1.45f, tf.position.z),
+            0.35f, color);
+    }
+
+    void DrawCombatDebug()
+    {
+        if (!m_showHitbox) return;
+
+        auto& dbg = GetRenderer().Debug();
+
+        DrawAttackRange(dbg, m_enemyTf, m_enemyActions);
+        DrawAttackRange(dbg, m_playerTf, m_actions);
+
+        DrawBody(dbg, m_playerTf, m_actions);
+        DrawBody(dbg, m_enemyTf, m_enemyActions);
+    }
+
     void OnRender(float alpha) override
     {
         (void)alpha;
@@ -821,6 +867,8 @@ protected:
 
         GetRenderer().DrawModel(&m_character, m_playerTf.World(kCharacterScale));
         GetRenderer().DrawModel(&m_enemy, m_enemyTf.World(kCharacterScale));
+
+        DrawCombatDebug();
     }
 
     // 体幹の調整項目
@@ -965,6 +1013,8 @@ protected:
             {
                 if (ImGui::Button("最初から (R)")) ResetBattle();
                 ImGui::Separator();
+
+                ImGui::Checkbox("当たり判定を表示", &m_showHitbox);
 
                 // 今の進行状況
                 ImGui::Text("自分 : %s   %d F",
