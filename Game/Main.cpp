@@ -291,6 +291,15 @@ private:
         return std::sqrt(dx * dx + dz * dz);
     }
 
+    // モーションを止めるかどうか
+    static float StaggerDt(const Engine::ActionStateMachine& sm, float dt)
+    {
+        if (sm.Stagger() <= 0) return dt;
+
+        const auto* a = sm.CurrentAction();
+        return (a && !a->deflectClip.empty()) ? dt : 0.0f;
+    }
+
     // カメラ基準で方向を作る
     bool ReadMoveInput(float& outX, float& outZ) const
     {
@@ -427,8 +436,8 @@ private:
 protected:
     void OnUpdate(float dt) override
     {
-        m_character.UpdateAnimation(dt);
-        m_enemy.UpdateAnimation(dt);
+        m_character.UpdateAnimation(StaggerDt(m_actions, dt));
+        m_enemy.UpdateAnimation(StaggerDt(m_enemyActions, dt));
 
         // 矢印キーでカメラを回す
         const float rotSpeed = 2.0f;   // ラジアン/秒
@@ -554,12 +563,15 @@ protected:
             }
             else
             {
-                // 連撃は止めない
-                int frames = 0;
                 if (const auto* a = m_enemyActions.CurrentAction())
-                    frames = a->deflectFrames;
+                {
+                    m_enemyActions.AddStagger(a->deflectFrames);
 
-                m_enemyActions.AddStagger(frames);
+                    // モーションがある場合  
+                    if (!a->deflectClip.empty())
+                        m_enemy.Play(a->deflectClip, 0.05f);
+                }
+
                 std::printf("弾いた!  (敵の体幹 %.0f / %.0f)\n",
                     m_enemyPosture.Value(), m_enemyPosture.Max());
             }

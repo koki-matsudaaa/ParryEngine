@@ -48,18 +48,21 @@ namespace Engine
         }
 
         // 再生するモーションを選ぶ
-        void ClipCombo(ActionData& a, const Animator* anim)
+        void ClipCombo(const char* label, std::string& target, const Animator* anim)
         {
-            const char* preview = a.clipName.empty() ? "(なし)" : a.clipName.c_str();
-            if (!ImGui::BeginCombo("モーション", preview)) return;
+            const char* preview = target.empty() ? "(なし)" : target.c_str();
+            if (!ImGui::BeginCombo(label, preview)) return;
+
+            if (ImGui::Selectable("(なし)", target.empty()))
+                target.clear();
 
             if (anim)
             {
                 for (size_t i = 0; i < anim->ClipCount(); i++)
                 {
                     const std::string& n = anim->ClipName(i);
-                    if (ImGui::Selectable(n.c_str(), a.clipName == n))
-                        a.clipName = n;
+                    if (ImGui::Selectable(n.c_str(), target == n))
+                        target = n;
                 }
             }
             ImGui::EndCombo();
@@ -82,7 +85,7 @@ namespace Engine
 
             if (open)
             {
-                ClipCombo(a, sm.GetAnimator());
+                ClipCombo("モーション", a.clipName, sm.GetAnimator());
                 ImGui::SliderInt("発生", &a.startup, 0, 150);
                 ImGui::SliderInt("判定", &a.active, 0, 60);
                 ImGui::SliderInt("硬直", &a.recovery, 0, 90);
@@ -91,6 +94,7 @@ namespace Engine
                 ImGui::SliderInt("AIの重み", &a.aiWeight, 0, 10);
                 ImGui::SliderFloat("届く距離", &a.range, 0.5f, 5.0f, "%.1f m");
                 ImGui::SliderInt("弾かれた隙", &a.deflectFrames, 0, 120);
+                ClipCombo("弾かれモーション", a.deflectClip, sm.GetAnimator());
 
                 ImGui::Checkbox("パリィ技", &a.isParry);
                 ImGui::SameLine();

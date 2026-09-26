@@ -71,6 +71,9 @@ namespace Engine
         // はじかれたときの後隙
         int deflectFrames = 0;
 
+        // 弾かれたときのモーション
+        std::string deflectClip;
+
         int TotalFrames() const { return startup + active + recovery; }
     };
 }

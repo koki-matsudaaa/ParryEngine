@@ -15,7 +15,8 @@ isDodge = 0
 moveSpeed = 0
 isGuard = 0
 holdable = 0
-deflectFrames = 30
+deflectFrames = 35
+deflectClip = Deflected
 
 [EnemyQuick]
 clip = Thrust
@@ -70,7 +71,8 @@ isDodge = 0
 moveSpeed = 0
 isGuard = 0
 holdable = 0
-deflectFrames = 40
+deflectFrames = 45
+deflectClip = Deflected
 
 [EnemyDanger]
 clip = Heavy
@@ -83,24 +85,6 @@ isParry = 0
 postureDamage = 40
 unblockable = 1
 aiWeight = 1
-range = 2
-isDodge = 0
-moveSpeed = 0
-isGuard = 0
-holdable = 0
-deflectFrames = 0
-
-[Deflected]
-clip = Deflected
-blendSeconds = 0.1
-startup = 0
-active = 0
-recovery = 25
-cancelFrom = -1
-isParry = 0
-postureDamage = 20
-unblockable = 0
-aiWeight = 0
 range = 2
 isDodge = 0
 moveSpeed = 0

@@ -63,6 +63,8 @@ namespace Engine
             f << "isGuard = " << (a.isGuard ? 1 : 0) << "\n";
             f << "holdable = " << (a.holdable ? 1 : 0) << "\n";
             f << "deflectFrames = " << a.deflectFrames << "\n";
+            if (!a.deflectClip.empty())
+                f << "deflectClip = " << a.deflectClip << "\n";
             if (!a.nextAction.empty())
                 f << "nextAction = " << a.nextAction << "\n";
 
@@ -134,6 +136,7 @@ namespace Engine
                 else if (key == "isGuard")       a.isGuard = (std::stoi(val) != 0);
                 else if (key == "holdable")      a.holdable = (std::stoi(val) != 0);
                 else if (key == "deflectFrames") a.deflectFrames = std::stoi(val);
+                else if (key == "deflectClip")   a.deflectClip = val;
             }
             catch (...)
             {
