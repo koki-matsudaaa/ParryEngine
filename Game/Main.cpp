@@ -110,7 +110,6 @@ class GameApp : public Engine::Application
     bool m_showSword = true;    // 剣
 
     // 当たり判定を付けるボーン
-    // 当たり判定を付けるボーン
     std::string m_playerHitBone = "mixamorig:RightHand";
     std::string m_enemyHitBone = "mixamorig:RightHand";
 
@@ -129,10 +128,11 @@ protected:
         SetClearColor(0.10f, 0.16f, 0.24f);
 
         if (!LoadTerrain())   return false;
+        if (!LoadCharacter()) return false;
+
         for (size_t i = 0; i < m_character.BoneCount(); i++)
             m_playerBones.push_back(m_character.BoneName(i));
 
-        if (!LoadCharacter()) return false;
         for (size_t i = 0; i < m_enemy.BoneCount(); i++)
             m_enemyBones.push_back(m_enemy.BoneName(i));
 
@@ -842,7 +842,7 @@ protected:
     }
 
     // 体の位置
-    static void DrawBody(Engine::DebugDraw& dbg,
+    void DrawBody(Engine::DebugDraw& dbg,
         const Engine::Transform& tf,
         const Engine::ActionStateMachine& sm)
     {
@@ -851,10 +851,9 @@ protected:
         else if (sm.IsInvincible()) color = XMFLOAT3(0.3f, 0.5f, 1.0f);  // 無敵
         else if (sm.IsGuarding())   color = XMFLOAT3(0.9f, 0.9f, 0.9f);  // ガード
 
-        dbg.Capsule(
-            XMFLOAT3(tf.position.x, tf.position.y + 0.35f, tf.position.z),
-            XMFLOAT3(tf.position.x, tf.position.y + 1.45f, tf.position.z),
-            0.35f, color);
+        // 判定と同じ形を描く
+        const Engine::Capsule c = BodyCapsule(tf);
+        dbg.Capsule(c.a, c.b, c.radius, color);
     }
 
     // ボーン基準の点
