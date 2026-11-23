@@ -4,5 +4,5 @@
 namespace Engine
 {
     // 登録されたアクション一覧
-    void DrawActionEditor(ActionStateMachine& sm, float pixelsPerFrame = 6.0f);
+    void DrawActionEditor(ActionStateMachine& sm, float pixelsPerFrame = 6.0f, const std::vector<std::string>* boneNames = nullptr);
 }
