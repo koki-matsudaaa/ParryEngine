@@ -80,6 +80,13 @@ namespace Engine
         // ボーン数 (定数バッファのサイズ決めに仕様)
         size_t GetBoneCount() const { return m_bones.size(); }
 
+        // ボーン名から、今のフレームでの位置・向きを取る
+        bool BoneMatrix(const std::string& name, DirectX::XMMATRIX& out) const;
+
+        // ボーンの一覧。調整画面でボーンを選ぶのに使う。
+        size_t BoneCount() const { return m_bones.size(); }
+        const std::string& BoneName(size_t i) const;
+
         // IRenderable として、今のポーズを描画側へ渡す。
         const XMMATRIX* GetBoneMatrices() const override
         {
@@ -104,7 +111,6 @@ namespace Engine
         // 読み込んだ全頂点の最小・最大 (当たり判定の半径算出などに使える)。
         XMFLOAT3 GetMin() const { return m_min; }
         XMFLOAT3 GetMax() const { return m_max; }
-
 
         const std::vector<FbxVtx>& GetVertices() const { return m_vertices; }
         const std::vector<unsigned int>& GetIndices() const { return m_indices; }

@@ -142,6 +142,16 @@ namespace Engine
         return true;
     }
 
+    bool Animator::BoneGlobal(size_t index, XMMATRIX& out) const
+    {
+        if (index >= m_pose.size() || index >= m_bindInverses.size())
+            return false;
+
+        // m_pose はバインド逆行列 × 今の姿勢なので、バインド逆行列を打ち消せば、今の姿勢そのものが取り出せる。
+        out = XMMatrixInverse(nullptr, m_bindInverses[index]) * m_pose[index];
+        return true;
+    }
+
     const std::vector<XMMATRIX>* Animator::SampleClip(int clipIndex, float time) const
     {
         if (clipIndex < 0 || clipIndex >= static_cast<int>(m_clips.size())) return nullptr;
