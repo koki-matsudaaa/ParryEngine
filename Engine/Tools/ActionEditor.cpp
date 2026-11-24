@@ -67,9 +67,28 @@ namespace Engine
             }
             ImGui::EndCombo();
         }
+
+        // 判定を付けるボーンを選ぶ
+        void HitBoneCombo(ActionData& a, const std::vector<std::string>* bones)
+        {
+            if (!bones) return;
+
+            const char* preview = a.hitBone.empty() ? "(既定)" : a.hitBone.c_str();
+            if (!ImGui::BeginCombo("ボーン", preview)) return;
+
+            if (ImGui::Selectable("(既定)", a.hitBone.empty()))
+                a.hitBone.clear();
+
+            for (const auto& n : *bones)
+            {
+                if (ImGui::Selectable(n.c_str(), a.hitBone == n))
+                    a.hitBone = n;
+            }
+            ImGui::EndCombo();
+        }
     }
 
-    void DrawActionEditor(ActionStateMachine& sm, float ppf)
+    void DrawActionEditor(ActionStateMachine& sm, float ppf, const std::vector<std::string>* boneNames)
     {
         ImGui::PushID(&sm);
         auto& all = sm.Actions();
@@ -95,6 +114,16 @@ namespace Engine
                 ImGui::SliderFloat("届く距離", &a.range, 0.5f, 5.0f, "%.1f m");
                 ImGui::SliderInt("弾かれた隙", &a.deflectFrames, 0, 120);
                 ClipCombo("弾かれモーション", a.deflectClip, sm.GetAnimator());
+
+                if (a.isAttack && ImGui::TreeNode("当たり判定"))
+                {
+                    HitBoneCombo(a, boneNames);
+                    ImGui::SliderFloat3("位置", &a.hitOffset.x, -1.0f, 1.0f, "%.2f m");
+                    ImGui::SliderFloat3("向き", &a.hitRotation.x, -180.0f, 180.0f, "%.0f 度");
+                    ImGui::SliderFloat("長さ", &a.hitLength, 0.1f, 2.0f, "%.2f m");
+                    ImGui::SliderFloat("太さ", &a.hitRadius, 0.01f, 0.4f, "%.2f m");
+                    ImGui::TreePop();
+                }
 
                 ImGui::Checkbox("攻撃", &a.isAttack);
                 ImGui::SameLine();

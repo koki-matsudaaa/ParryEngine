@@ -2,7 +2,7 @@
 [EnemySlash]
 clip = Slash
 blendSeconds = 0.1
-startup = 40
+startup = 30
 active = 10
 recovery = 30
 cancelFrom = -1
@@ -37,11 +37,12 @@ isGuard = 0
 holdable = 0
 deflectFrames = 20
 isAttack = 1
+hitBone = mixamorig:RightFoot
 
 [EnemyCombo1]
 clip = Slash
 blendSeconds = 0.1
-startup = 40
+startup = 30
 active = 10
 recovery = 10
 cancelFrom = -1

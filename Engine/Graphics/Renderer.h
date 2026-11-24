@@ -4,18 +4,10 @@
 #include <vector>
 #include <DirectXMath.h>
 #include "Engine/Graphics/PipelineCache.h"
+#include "Engine/Graphics/DebugDraw.h"
 
 namespace Engine
 {
-    // ────────────────────────────────────────────────────────────
-    // 画面を出すための最低限。
-    //
-    // デバイス・スワップチェーン・深度バッファ・フェンスを持ち、
-    // 1フレームの開始と終了だけを引き受ける。
-    //
-    // 「何を描くか」は知らない。モデルを描くコマンドは
-    // BeginFrame と EndFrame の間で、外から積む。
-    // ────────────────────────────────────────────────────────────
     class Renderer
     {
     public:
@@ -25,29 +17,35 @@ namespace Engine
         Renderer(const Renderer&) = delete;
         Renderer& operator=(const Renderer&) = delete;
 
-        // DX12 を一式立ち上げる。失敗したら false。
+        // DX12 を一式立ち上げる
         bool Initialize(HWND hwnd);
 
-        // 確保した資源を解放する。
+        // 確保した資源を解放する
         void Shutdown();
 
-        // フレームの開始。今回のバックバッファを描画先にして、指定色で塗る。
+        // フレームの開始。
         void BeginFrame(const float clearColor[4]);
 
         // フレームの終了。コマンドを積み終えてから呼ぶ。
         // GPU に投げて、描き終わるのを待ってから画面に出す。
         void EndFrame();
 
-        // 描画コマンドを積む先。外部から使う。
+        // 描画コマンドを積む先。
         ID3D12GraphicsCommandList* CommandList() const;
 
-        // カメラを設定する。BeginFrame の後、DrawModel の前に1回呼ぶ。
+        // カメラを設定
         void SetCamera(const DirectX::XMMATRIX& view,
             const DirectX::XMMATRIX& proj,
             const DirectX::XMFLOAT3& eye);
 
         // モデルを1つ描く。どのパイプラインで描くかはモデル自身が答える。
         void DrawModel(IRenderable* model, const DirectX::XMMATRIX& world);
+
+        // 線を積む先
+        DebugDraw& Debug() { return m_debug; }
+
+        // 積んだ線をまとめて描く
+        void FlushDebug();
 
     private:
         // GPU の処理が終わるまで待つ。
@@ -94,5 +92,7 @@ namespace Engine
         D3D12_RECT     m_scissor = {};
 
         UINT m_backBufferIndex = 0;
+
+        DebugDraw m_debug;
     };
 }

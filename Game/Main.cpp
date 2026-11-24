@@ -12,6 +12,7 @@
 #include "Engine/Combat/AttackSelect.h"
 #include "Engine/Core/Transform.h"
 #include "Engine/Combat/Health.h"
+#include "Engine/Combat/Collision.h"
 
 #include "imgui.h"
 
@@ -85,6 +86,7 @@ class GameApp : public Engine::Application
     float m_lockSide = 0.6f;         // 肩越しのずらし
     float m_lockPitch = 0.30f;       // 見下ろし角
     float m_lockTargetBias = 0.25f;  // 注視点を敵側へ寄せる割合
+    float m_lockYawOffset = 0.0f;   // ロック中、敵の方向からどれだけずらすか
 
     // 通常時のカメラ
     float m_freeDistance = 4.0f;
@@ -103,6 +105,23 @@ class GameApp : public Engine::Application
     float m_executeStand = 1.1f;   // 決め技のとき敵から離れて立つ距離
     float m_breakDamage = 50.0f;   // 崩壊で受ける体力ダメージ
 
+    bool m_showHitbox = true;   // 当たり判定の表示
+    bool m_showBody = true;     // 体
+    bool m_showSword = true;    // 剣
+
+    // 当たり判定を付けるボーン
+    std::string m_playerHitBone = "mixamorig:RightHand";
+    std::string m_enemyHitBone = "mixamorig:RightHand";
+
+    // 選べるボーンの一覧
+    std::vector<std::string> m_playerBones;
+    std::vector<std::string> m_enemyBones;
+
+    // 体の当たり判定
+    float m_bodyRadius = 0.35f;
+    float m_bodyLow = 0.35f;
+    float m_bodyHigh = 1.45f;
+
 protected:
     bool OnStart() override
     {
@@ -110,6 +129,13 @@ protected:
 
         if (!LoadTerrain())   return false;
         if (!LoadCharacter()) return false;
+
+        for (size_t i = 0; i < m_character.BoneCount(); i++)
+            m_playerBones.push_back(m_character.BoneName(i));
+
+        for (size_t i = 0; i < m_enemy.BoneCount(); i++)
+            m_enemyBones.push_back(m_enemy.BoneName(i));
+
         SetupCamera();
         SetupActions();
         LoadActionFiles();
@@ -521,7 +547,13 @@ protected:
 
         // 矢印キーでカメラを回す
         const float rotSpeed = 2.0f;   // ラジアン/秒
-        if (!m_lockOn)
+        if (m_lockOn)
+        {
+            // ロック中は、敵の方向からのずれを動かす
+            if (GetAsyncKeyState(VK_LEFT) & 0x8000)  m_lockYawOffset -= rotSpeed * dt;
+            if (GetAsyncKeyState(VK_RIGHT) & 0x8000) m_lockYawOffset += rotSpeed * dt;
+        }
+        else
         {
             if (GetAsyncKeyState(VK_LEFT) & 0x8000)  m_camera.AddYaw(-rotSpeed * dt);
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000) m_camera.AddYaw(+rotSpeed * dt);
@@ -532,7 +564,7 @@ protected:
         // ロック中
         if (m_lockOn)
         {
-            const float diff = Engine::AngleDiff(m_camera.GetYaw(), YawToEnemy());
+            const float diff = Engine::AngleDiff(m_camera.GetYaw(), YawToEnemy() + m_lockYawOffset);
             const float rate = std::min(1.0f, m_lockCameraSpeed * dt);
             m_camera.AddYaw(diff * rate);
 
@@ -628,8 +660,16 @@ protected:
 
         const float dist = DistanceToEnemy();
 
+        const bool enemyHits =
+            SwordHits(m_enemy, m_enemyTf, m_enemyHitBone, m_enemyActions, m_playerTf);
+        const bool playerHits =
+            SwordHits(m_character, m_playerTf, m_playerHitBone, m_actions, m_enemyTf);
+
         // 判定　敵からプレイヤー
-        switch (m_parry.Resolve(m_enemyActions, m_actions, dist))
+        const auto enemyResult = m_parry.Resolve(m_enemyActions, m_actions, enemyHits);
+        if (enemyResult != Engine::ParryResult::None) m_enemyActions.MarkHit();
+
+        switch (enemyResult)
         {
         case Engine::ParryResult::Success:
         {
@@ -727,7 +767,10 @@ protected:
         }
 
         // 判定　プレイヤーから敵
-        switch (m_parry.Resolve(m_actions, m_enemyActions, dist))
+        const auto playerResult = m_parry.Resolve(m_actions, m_enemyActions, playerHits);
+        if (playerResult != Engine::ParryResult::None) m_actions.MarkHit();
+
+        switch (playerResult)
         {
         case Engine::ParryResult::Success:
         {
@@ -785,6 +828,122 @@ protected:
         }
     }
 
+    void DrawSword(Engine::DebugDraw& dbg, const Engine::FbxModel& model,
+        const Engine::Transform& tf, const std::string& boneName,
+        const Engine::ActionStateMachine& sm)
+    {
+        Engine::Capsule c;
+        if (!AttackCapsule(model, tf, boneName, sm, c)) return;
+
+        const bool active = (sm.Phase() == ActionPhase::Active);
+
+        dbg.Capsule(c.a, c.b, c.radius,
+            active ? XMFLOAT3(1.0f, 0.3f, 0.1f) : XMFLOAT3(0.45f, 0.45f, 0.2f));
+    }
+
+    // 体の位置
+    void DrawBody(Engine::DebugDraw& dbg,
+        const Engine::Transform& tf,
+        const Engine::ActionStateMachine& sm)
+    {
+        XMFLOAT3 color(0.5f, 0.5f, 0.5f);                            // 何もしていない
+        if (sm.OnParry())           color = XMFLOAT3(0.2f, 1.0f, 0.5f);  // パリィ受付
+        else if (sm.IsInvincible()) color = XMFLOAT3(0.3f, 0.5f, 1.0f);  // 無敵
+        else if (sm.IsGuarding())   color = XMFLOAT3(0.9f, 0.9f, 0.9f);  // ガード
+
+        // 判定と同じ形を描く
+        const Engine::Capsule c = BodyCapsule(tf);
+        dbg.Capsule(c.a, c.b, c.radius, color);
+    }
+
+    // ボーン基準の点
+    static XMFLOAT3 BonePoint(const XMMATRIX& boneToWorld, const XMFLOAT3& offsetM)
+    {
+        const XMVECTOR v = XMVectorSet(
+            offsetM.x / kCharacterScale,
+            offsetM.y / kCharacterScale,
+            offsetM.z / kCharacterScale, 1.0f);
+
+        XMFLOAT3 out;
+        XMStoreFloat3(&out, XMVector3Transform(v, boneToWorld));
+        return out;
+    }
+
+    // 体の当たり判定
+    Engine::Capsule BodyCapsule(const Engine::Transform& tf) const
+    {
+        Engine::Capsule c;
+        c.a = XMFLOAT3(tf.position.x, tf.position.y + m_bodyLow, tf.position.z);
+        c.b = XMFLOAT3(tf.position.x, tf.position.y + m_bodyHigh, tf.position.z);
+        c.radius = m_bodyRadius;
+        return c;
+    }
+
+    // 剣の当たり判定
+    bool AttackCapsule(const Engine::FbxModel& model, const Engine::Transform& tf,
+        const std::string& boneName, const Engine::ActionStateMachine& sm,
+        Engine::Capsule& out) const
+    {
+        const Engine::ActionData* a = sm.CurrentAction();
+        if (!a || !a->isAttack) return false;
+
+        XMMATRIX bone;
+        const std::string& useBone = a->hitBone.empty() ? boneName : a->hitBone;
+        if (!model.BoneMatrix(useBone, bone)) return false;
+
+        const XMMATRIX toWorld = bone * tf.World(kCharacterScale);
+
+        // 向き、回転、長さ
+        const XMMATRIX rot = XMMatrixRotationRollPitchYaw(
+            XMConvertToRadians(a->hitRotation.x),
+            XMConvertToRadians(a->hitRotation.y),
+            XMConvertToRadians(a->hitRotation.z));
+
+        XMFLOAT3 dir;
+        XMStoreFloat3(&dir,
+            XMVector3TransformNormal(XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f), rot));
+
+        const XMFLOAT3 p0 = a->hitOffset;
+        const XMFLOAT3 p1(p0.x + dir.x * a->hitLength,
+            p0.y + dir.y * a->hitLength,
+            p0.z + dir.z * a->hitLength);
+
+        out.a = BonePoint(toWorld, p0);
+        out.b = BonePoint(toWorld, p1);
+        out.radius = a->hitRadius;
+        return true;
+    }
+
+    // 攻撃側の判定が、防御側の体に当たっているか
+    bool SwordHits(const Engine::FbxModel& model, const Engine::Transform& tf,
+        const std::string& boneName, const Engine::ActionStateMachine& sm,
+        const Engine::Transform& target) const
+    {
+        Engine::Capsule c;
+        if (!AttackCapsule(model, tf, boneName, sm, c)) return false;
+
+        return Engine::Overlap(c, BodyCapsule(target));
+    }
+
+    void DrawCombatDebug()
+    {
+        if (!m_showHitbox) return;
+
+        auto& dbg = GetRenderer().Debug();
+
+        if (m_showBody)
+        {
+            DrawBody(dbg, m_playerTf, m_actions);
+            DrawBody(dbg, m_enemyTf, m_enemyActions);
+        }
+
+        if (m_showSword)
+        {
+            DrawSword(dbg, m_character, m_playerTf, m_playerHitBone, m_actions);
+            DrawSword(dbg, m_enemy, m_enemyTf, m_enemyHitBone, m_enemyActions);
+        }
+    }
+
     void OnRender(float alpha) override
     {
         (void)alpha;
@@ -821,6 +980,8 @@ protected:
 
         GetRenderer().DrawModel(&m_character, m_playerTf.World(kCharacterScale));
         GetRenderer().DrawModel(&m_enemy, m_enemyTf.World(kCharacterScale));
+
+        DrawCombatDebug();
     }
 
     // 体幹の調整項目
@@ -842,6 +1003,21 @@ protected:
         ImGui::PopID();
     }
 
+    // 当たり判定を付けるボーンを選ぶ
+    static void BoneGui(const char* label, std::string& bone,
+        const Engine::FbxModel& model)
+    {
+        if (!ImGui::BeginCombo(label, bone.c_str())) return;
+
+        for (size_t i = 0; i < model.BoneCount(); i++)
+        {
+            const std::string& n = model.BoneName(i);
+            if (ImGui::Selectable(n.c_str(), bone == n))
+                bone = n;
+        }
+        ImGui::EndCombo();
+    }
+
     void OnGui() override
     {
         // --- コマ送り ---
@@ -850,6 +1026,9 @@ protected:
         {
             if (ImGui::IsKeyPressed(ImGuiKey_F1, false))
                 m_showTools = !m_showTools;
+
+            if (ImGui::IsKeyPressed(ImGuiKey_F2, false))
+                m_showHitbox = !m_showHitbox;
 
             if (ImGui::IsKeyPressed(ImGuiKey_R, false))
                 ResetBattle();
@@ -900,6 +1079,15 @@ protected:
         ImGui::TextDisabled("F1 で表示切替");
 
         ImGui::TextDisabled("WASD 移動 / Z 攻撃 / X ガード / C パリィ / Shift 回避 / Q ロック / R やり直し");
+
+        ImGui::Checkbox("当たり判定 (F2)", &m_showHitbox);
+        ImGui::SameLine();
+        ImGui::BeginDisabled(!m_showHitbox);
+        ImGui::Checkbox("体", &m_showBody);
+        ImGui::SameLine();
+        ImGui::Checkbox("剣", &m_showSword);
+        ImGui::EndDisabled();
+
         ImGui::Separator();
 
         if (ImGui::BeginTabBar("tabs"))
@@ -910,7 +1098,7 @@ protected:
                 Engine::DrawFrameRuler(120, m_zoom);
                 ImGui::Separator();
 
-                Engine::DrawActionEditor(m_actions, m_zoom);
+                Engine::DrawActionEditor(m_actions, m_zoom, &m_playerBones);
 
                 ImGui::Separator();
 
@@ -931,6 +1119,7 @@ protected:
                     ImGui::SliderFloat("見下ろし角", &m_lockPitch,
                         m_camera.minPitch, m_camera.maxPitch, "%.2f");
                     ImGui::SliderFloat("敵へ寄せる", &m_lockTargetBias, 0.0f, 0.8f, "%.2f");
+                    ImGui::SliderFloat("横へのずれ", &m_lockYawOffset, -3.14f, 3.14f, "%.2f");
                     ImGui::TreePop();
                 }
 
@@ -949,7 +1138,7 @@ protected:
                 Engine::DrawFrameRuler(120, m_zoom);
                 ImGui::Separator();
 
-                Engine::DrawActionEditor(m_enemyActions, m_zoom);
+                Engine::DrawActionEditor(m_enemyActions, m_zoom, &m_enemyBones);
 
                 ImGui::Separator();
                 ImGui::SliderInt("敵の攻撃間隔", &m_enemyInterval, 30, 240);
@@ -965,6 +1154,12 @@ protected:
             {
                 if (ImGui::Button("最初から (R)")) ResetBattle();
                 ImGui::Separator();
+
+                BoneGui("自分の判定ボーン", m_playerHitBone, m_character);
+                BoneGui("敵の判定ボーン", m_enemyHitBone, m_enemy);
+                ImGui::SliderFloat("体の太さ", &m_bodyRadius, 0.1f, 1.0f, "%.2f m");
+                ImGui::SliderFloat("体の下端", &m_bodyLow, 0.0f, 1.0f, "%.2f m");
+                ImGui::SliderFloat("体の上端", &m_bodyHigh, 0.5f, 2.5f, "%.2f m");
 
                 // 今の進行状況
                 ImGui::Text("自分 : %s   %d F",

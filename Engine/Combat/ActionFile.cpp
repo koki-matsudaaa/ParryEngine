@@ -35,6 +35,20 @@ namespace Engine
             }
             return out;
         }
+
+        // 3つ組を読む
+        DirectX::XMFLOAT3 ParseVec3(const std::string& s)
+        {
+            DirectX::XMFLOAT3 v{ 0.0f, 0.0f, 0.0f };
+            const auto parts = SplitComma(s);
+            if (parts.size() >= 3)
+            {
+                v.x = std::stof(parts[0]);
+                v.y = std::stof(parts[1]);
+                v.z = std::stof(parts[2]);
+            }
+            return v;
+        }
     }
 
     bool SaveActions(const std::vector<ActionData>& actions, const std::string& path)
@@ -64,10 +78,22 @@ namespace Engine
             f << "holdable = " << (a.holdable ? 1 : 0) << "\n";
             f << "deflectFrames = " << a.deflectFrames << "\n";
             f << "isAttack = " << (a.isAttack ? 1 : 0) << "\n";
+
             if (!a.deflectClip.empty())
                 f << "deflectClip = " << a.deflectClip << "\n";
+
             if (!a.nextAction.empty())
                 f << "nextAction = " << a.nextAction << "\n";
+
+            if (!a.hitBone.empty())
+                f << "hitBone = " << a.hitBone << "\n";
+
+            f << "hitOffset = " << a.hitOffset.x << ", "
+                << a.hitOffset.y << ", " << a.hitOffset.z << "\n";
+            f << "hitRotation = " << a.hitRotation.x << ", "
+                << a.hitRotation.y << ", " << a.hitRotation.z << "\n";
+            f << "hitLength = " << a.hitLength << "\n";
+            f << "hitRadius = " << a.hitRadius << "\n";
 
             if (!a.cancelTo.empty())
             {
@@ -139,6 +165,11 @@ namespace Engine
                 else if (key == "deflectFrames") a.deflectFrames = std::stoi(val);
                 else if (key == "deflectClip")   a.deflectClip = val;
                 else if (key == "isAttack")      a.isAttack = (std::stoi(val) != 0);
+                else if (key == "hitOffset")     a.hitOffset = ParseVec3(val);
+                else if (key == "hitRotation")   a.hitRotation = ParseVec3(val);
+                else if (key == "hitLength")     a.hitLength = std::stof(val);
+                else if (key == "hitRadius")     a.hitRadius = std::stof(val);
+                else if (key == "hitBone")       a.hitBone = val;
             }
             catch (...)
             {

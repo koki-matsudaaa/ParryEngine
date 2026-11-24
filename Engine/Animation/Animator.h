@@ -40,6 +40,9 @@ namespace Engine
         // デバッグ用
         void SetFixedFrame(int frame) { m_fixedFrame = frame; }
 
+        // ボーンの位置・向き
+        bool BoneGlobal(size_t index, DirectX::XMMATRIX& out) const;
+
     private:
         // クリップの指定時刻のフレームを返す。
         const std::vector<DirectX::XMMATRIX>* SampleClip(int clipIndex, float time) const;

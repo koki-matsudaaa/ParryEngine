@@ -64,6 +64,10 @@ namespace Engine
 
         int Stagger() const { return m_stagger; }
 
+        // この攻撃がもう当たったか
+        bool HasHit() const { return m_hasHit; }
+        void MarkHit() { m_hasHit = true; }
+
         // 登録されているアクションを名前で引く。
         const ActionData* Find(const std::string& name) const;
 
@@ -88,5 +92,7 @@ namespace Engine
         bool m_hold = false;
 
         int m_stagger = 0;
+
+        bool m_hasHit = false;
     };
 }

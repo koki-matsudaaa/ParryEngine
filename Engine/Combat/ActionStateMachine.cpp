@@ -37,6 +37,7 @@ namespace Engine
         m_frame = 0;
         m_prevPhase = ActionPhase::None;    //  リセット
         m_stagger = 0;
+        m_hasHit = false;
 
         // 対応するアニメへ切り替える。
         const ActionData& a = m_actions[m_current];
@@ -86,6 +87,7 @@ namespace Engine
         m_current = -1;
         m_frame = 0;
         m_stagger = 0;
+        m_hasHit = false;
     }
 
     void ActionStateMachine::Clear()
@@ -95,6 +97,7 @@ namespace Engine
         m_current = -1;
         m_frame = 0;
         m_stagger = 0;
+        m_hasHit = false;
         m_prevPhase = ActionPhase::None;
     }
 

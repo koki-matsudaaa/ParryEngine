@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include <string>
 #include <vector>
+#include <DirectXMath.h>
 
 namespace Engine
 {
@@ -75,6 +76,15 @@ namespace Engine
 
         // 弾かれたときのモーション
         std::string deflectClip;
+
+        // 判定を付けるボーン
+        std::string hitBone;
+
+        // 攻撃の当たり判定
+        DirectX::XMFLOAT3 hitOffset{ 0.0f, 0.0f, 0.0f };     // 根元の位置 (m)
+        DirectX::XMFLOAT3 hitRotation{ 0.0f, 0.0f, 0.0f };   // 向き (度)
+        float hitLength = 0.8f;    // 長さ (m)
+        float hitRadius = 0.08f;   // 太さ (m)
 
         int TotalFrames() const { return startup + active + recovery; }
     };

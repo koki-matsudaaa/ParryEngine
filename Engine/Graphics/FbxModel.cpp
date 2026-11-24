@@ -427,6 +427,20 @@ namespace Engine
         }
     }
 
+    bool FbxModel::BoneMatrix(const std::string& name, XMMATRIX& out) const
+    {
+        auto it = m_boneIndexByName.find(name);
+        if (it == m_boneIndexByName.end()) return false;
+
+        return m_animator.BoneGlobal(static_cast<size_t>(it->second), out);
+    }
+
+    const std::string& FbxModel::BoneName(size_t i) const
+    {
+        static const std::string empty;
+        return (i < m_bones.size()) ? m_bones[i].name : empty;
+    }
+
     // FbxAMatrix を XMMATRIX に変換する。
     XMMATRIX FbxModel::ToXMMatrix(const FbxAMatrix& m)
     {
