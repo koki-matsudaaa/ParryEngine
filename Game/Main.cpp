@@ -1018,9 +1018,140 @@ protected:
         ImGui::EndCombo();
     }
 
+    // HUD
+    // ゲージを1本
+    static void DrawGauge(ImDrawList* dl, const ImVec2& pos, const ImVec2& size,
+        float ratio, ImU32 color)
+    {
+        if (ratio < 0.0f) ratio = 0.0f;
+        if (ratio > 1.0f) ratio = 1.0f;
+
+        const ImVec2 end(pos.x + size.x, pos.y + size.y);
+
+        dl->AddRectFilled(pos, end, IM_COL32(18, 18, 22, 205));
+        dl->AddRectFilled(pos, ImVec2(pos.x + size.x * ratio, end.y), color);
+        dl->AddRect(pos, end, IM_COL32(235, 235, 235, 80));
+    }
+
+    // 中央揃えの文字
+    static void DrawCenteredText(ImDrawList* dl, float centerX, float y,
+        float scale, ImU32 color, const char* text)
+    {
+        ImFont* font = ImGui::GetFont();
+        const float size = ImGui::GetFontSize() * scale;
+        const ImVec2 ext = font->CalcTextSizeA(size, FLT_MAX, 0.0f, text);
+
+        dl->AddText(font, size, ImVec2(centerX - ext.x * 0.5f, y), color, text);
+    }
+
+    // 3D の点を画面座標へ
+    bool WorldToScreen(const XMFLOAT3& world, ImVec2& out) const
+    {
+        const XMMATRIX vp = m_camera.View() * m_camera.Projection();
+        const XMVECTOR p = XMVector3Transform(XMLoadFloat3(&world), vp);
+
+        const float w = XMVectorGetW(p);
+        if (w <= 0.0001f) return false;
+
+        const float ndcX = XMVectorGetX(p) / w;
+        const float ndcY = XMVectorGetY(p) / w;
+
+        const ImGuiViewport* view = ImGui::GetMainViewport();
+        out.x = view->Pos.x + (ndcX * 0.5f + 0.5f) * view->Size.x;
+        out.y = view->Pos.y + (0.5f - ndcY * 0.5f) * view->Size.y;
+        return true;
+    }
+
+    // 画面に出す情報
+    void DrawHud()
+    {
+        ImDrawList* dl = ImGui::GetBackgroundDrawList();
+        const ImGuiViewport* view = ImGui::GetMainViewport();
+        const ImVec2 o = view->Pos;
+        const ImVec2 s = view->Size;
+        const float centerX = o.x + s.x * 0.5f;
+
+        // 敵の体幹
+        {
+            const float w = 420.0f;
+            const float h = 16.0f;
+            const float y = o.y + 46.0f;
+
+            const bool broken = m_enemyPosture.IsBroken();
+            const float r = m_enemyPosture.Ratio();
+
+            // 崩壊が近いほど赤くなる
+            const ImU32 col = broken ? IM_COL32(255, 85, 60, 255)
+                : (r > 0.7f) ? IM_COL32(255, 165, 45, 255)
+                : IM_COL32(220, 205, 95, 255);
+
+            DrawGauge(dl, ImVec2(centerX - w * 0.5f, y), ImVec2(w, h),
+                broken ? 1.0f : r, col);
+
+            DrawCenteredText(dl, centerX, y - 26.0f, 1.5f,
+                IM_COL32(240, 240, 240, 235),
+                broken ? "敵　体幹崩壊" : "敵");
+        }
+
+        // 自分
+        {
+            const float labelW = 52.0f;
+            const float w = 300.0f;
+            const float h = 18.0f;
+            const float x = o.x + 34.0f;
+            const float y = o.y + s.y - 84.0f;
+
+            const ImU32 textCol = IM_COL32(235, 235, 235, 255);
+
+            // 体力
+            dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 1.2f, ImVec2(x, y), textCol, "体力");
+            DrawGauge(dl, ImVec2(x + labelW, y), ImVec2(w, h),
+                m_playerHealth.Ratio(), IM_COL32(205, 60, 60, 255));
+
+            // 体幹
+            const float py = y + h + 10.0f;
+            const float r = m_playerPosture.Ratio();
+            const ImU32 col = (r > 0.7f) ? IM_COL32(255, 125, 45, 255)
+                : IM_COL32(230, 200, 85, 255);
+
+            dl->AddText(ImGui::GetFont(), ImGui::GetFontSize() * 1.2f, ImVec2(x, py), textCol, "体幹");
+            DrawGauge(dl, ImVec2(x + labelW, py), ImVec2(w, h), r, col);
+        }
+
+        if (m_state != BattleState::Fighting) return;
+
+        // 弾けない攻撃が来ている
+        if (const Engine::ActionData* a = m_enemyActions.CurrentAction())
+        {
+            if (a->unblockable && m_enemyActions.Phase() != ActionPhase::Recovery)
+                DrawCenteredText(dl, centerX, o.y + s.y * 0.26f, 1.8f,
+                    IM_COL32(255, 70, 50, 255), "危険");
+        }
+
+        // とどめが届く
+        if (m_enemyPosture.IsBroken() && DistanceToEnemy() <= ExecuteRange())
+            DrawCenteredText(dl, centerX, o.y + s.y * 0.58f, 1.6f,
+                IM_COL32(255, 230, 125, 255), "とどめ　Z");
+
+        // ロックオンの印
+        if (m_lockOn)
+        {
+            const XMFLOAT3 head(m_enemyTf.position.x,
+                m_enemyTf.position.y + m_bodyHigh + 0.3f,
+                m_enemyTf.position.z);
+
+            ImVec2 p;
+            if (WorldToScreen(head, p))
+            {
+                dl->AddCircle(p, 9.0f, IM_COL32(255, 255, 255, 170), 0, 2.0f);
+                dl->AddCircleFilled(p, 3.0f, IM_COL32(255, 255, 255, 215));
+            }
+        }
+    }
+
     void OnGui() override
     {
-        // --- コマ送り ---
+        // コマ送り
         Engine::FixedTimestep& clock = Clock();
         if (!ImGui::GetIO().WantCaptureKeyboard)
         {
@@ -1039,6 +1170,8 @@ protected:
             if (clock.IsPaused() && ImGui::IsKeyPressed(ImGuiKey_N, true))
                 clock.RequestSingleStep();
         }
+
+        DrawHud();
 
         if (m_state != BattleState::Fighting)
         {
